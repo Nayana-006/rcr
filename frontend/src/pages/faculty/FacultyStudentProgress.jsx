@@ -16,7 +16,7 @@ function computeCompletion({ studentId, courseId, assignments }) {
 
 export default function FacultyStudentProgress() {
   const { user } = useAuth()
-  const facultyId = user?.id
+  const facultyId = user?.userId ?? user?.id
 
   const [model, setModel] = useState({ rows: [] })
 

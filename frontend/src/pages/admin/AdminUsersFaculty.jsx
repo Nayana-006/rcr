@@ -1,22 +1,41 @@
-import { useMemo } from 'react'
-import { getLocalUsers } from '../../services/api'
+import { useState, useEffect } from 'react'
+import { getUsersByRole, setUserActive, ensureArray } from '../../services/api'
 
 export default function AdminUsersFaculty() {
-  const model = useMemo(() => {
-    const users = getLocalUsers() ?? []
-    return users
-      .filter((u) => u.role === 'FACULTY')
-      .slice()
-      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
-      .map((u) => ({ id: u.id, name: u.name ?? 'Faculty', email: u.email, active: !!u.active }))
+  const [faculty, setFaculty] = useState([])
+  const [error, setError] = useState(null)
+
+  async function loadFaculty() {
+    const users = ensureArray(await getUsersByRole('FACULTY'))
+    setFaculty(
+      users
+        .slice()
+        .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+        .map((u) => ({ id: u.id, name: u.name ?? 'Faculty', email: u.email, active: !!u.active })),
+    )
+  }
+
+  useEffect(() => {
+    loadFaculty().catch((e) => setError(e?.response?.data?.message ?? 'Failed to load faculty'))
   }, [])
+
+  async function toggleActive(member) {
+    setError(null)
+    try {
+      await setUserActive(member.id, !member.active)
+      await loadFaculty()
+    } catch (e) {
+      setError(e?.response?.data?.message ?? 'Failed to update faculty')
+    }
+  }
 
   return (
     <div>
       <div className="card" style={{ padding: 16 }}>
         <div className="badge badgeAccent">User Management</div>
         <h1 style={{ fontSize: 26, marginTop: 10 }}>Manage Faculty</h1>
-        <p style={{ opacity: 0.8, marginTop: 6, lineHeight: 1.7 }}>Activate/Deactivate faculty records from localStorage.</p>
+        <p style={{ opacity: 0.8, marginTop: 6, lineHeight: 1.7 }}>Activate or deactivate faculty accounts via the backend API.</p>
+        {error ? <div className="badge badgeDanger" style={{ marginTop: 12 }}>{error}</div> : null}
       </div>
 
       <div className="card" style={{ padding: 16, marginTop: 14 }}>
@@ -32,8 +51,8 @@ export default function AdminUsersFaculty() {
               </tr>
             </thead>
             <tbody>
-              {model.length ? (
-                model.map((f) => (
+              {faculty.length ? (
+                faculty.map((f) => (
                   <tr key={f.id}>
                     <td>{f.name}</td>
                     <td>{f.email}</td>
@@ -43,8 +62,8 @@ export default function AdminUsersFaculty() {
                       </span>
                     </td>
                     <td>
-                      <button className="btn" onClick={() => alert('Toggle faculty activation (UI placeholder)')}>
-                        Toggle
+                      <button type="button" className="btn" onClick={() => toggleActive(f)}>
+                        {f.active ? 'Deactivate' : 'Activate'}
                       </button>
                     </td>
                   </tr>
@@ -63,5 +82,3 @@ export default function AdminUsersFaculty() {
     </div>
   )
 }
-
-

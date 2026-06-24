@@ -18,7 +18,7 @@ export default function Sidebar({ onLogout }) {
   const studentItems = [
     { to: '/student', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/student/profile', label: 'Profile', icon: User },
-    { to: '/student/courses/available', label: 'Available Courses', icon: BookOpen },
+    { to: '/student/courses', label: 'Available Courses', icon: BookOpen },
     { to: '/student/courses/my', label: 'My Courses', icon: BookOpen },
     { to: '/student/assignments', label: 'Assignments', icon: Pencil },
     { to: '/student/attendance', label: 'Attendance', icon: CalendarDays },
@@ -32,8 +32,8 @@ export default function Sidebar({ onLogout }) {
     { to: '/faculty/profile', label: 'Profile', icon: User },
     { to: '/faculty/courses', label: 'Manage Courses', icon: BookOpen },
     { to: '/faculty/assignments', label: 'Manage Assignments', icon: Pencil },
-    { to: '/faculty/attendance/:courseId', label: 'Attendance Management', icon: CalendarDays, disabled: true },
-    { to: '/faculty/progress/:courseId', label: 'Student Progress', icon: BookOpen, disabled: true },
+    { to: '/faculty/attendance', label: 'Attendance Management', icon: CalendarDays },
+    { to: '/faculty/student-progress', label: 'Student Progress', icon: BookOpen },
     { to: '/faculty/doubts', label: 'Doubts Management', icon: MessageCircle },
   ]
 
@@ -42,7 +42,7 @@ export default function Sidebar({ onLogout }) {
     { to: '/admin/users/students', label: 'Manage Students', icon: Users },
     { to: '/admin/users/faculty', label: 'Manage Faculty', icon: Users },
     { to: '/admin/courses', label: 'Manage Courses', icon: BookOpen },
-    { to: '/admin/statistics', label: 'System Statistics', icon: CalendarDays },
+    { to: '/admin/dashboard', label: 'System Statistics', icon: CalendarDays },
   ]
 
   const items = role === 'STUDENT' ? studentItems : role === 'FACULTY' ? facultyItems : adminItems

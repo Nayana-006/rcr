@@ -1,10 +1,18 @@
 import { useMemo, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
-import { enrollStudent, getCourses, getEnrollmentsByStudent, getAssignmentsByCourse, ensureArray } from '../../services/api'
-
+import {
+  enrollStudent,
+  getCourses,
+  getEnrollmentsByStudent,
+  getAssignmentsByCourse,
+  getSubmissionsByStudent,
+  ensureArray,
+} from '../../services/api'
 
 function CourseCard({ course, progress, onEnroll, enrolled }) {
+  const primaryUrl = course.primaryUrl
+
   return (
     <div className="card" style={{ padding: 14 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
@@ -42,21 +50,29 @@ function CourseCard({ course, progress, onEnroll, enrolled }) {
         <button className="btn" onClick={() => onEnroll(course.id)} disabled={enrolled}>
           {enrolled ? 'Enrolled' : 'Enroll'}
         </button>
-        <button className="btn btnPrimary" disabled>
-          View course
-        </button>
+        {enrolled && primaryUrl ? (
+          <a className="btn btnPrimary" href={primaryUrl} target="_blank" rel="noreferrer">
+            Open Course
+          </a>
+        ) : (
+          <button className="btn btnPrimary" disabled={!enrolled || !primaryUrl}>
+            Open Course
+          </button>
+        )}
       </div>
     </div>
   )
 }
 
-function computeCourseCompletion({ courseId, studentId, assignments }) {
-  const courseAssignments = assignments.filter((a) => a.courseId === courseId)
+function computeCourseCompletion({ courseId, studentId, assignments, submissions }) {
+  const courseAssignments = assignments.filter((a) => String(a.courseId) === String(courseId))
   if (!courseAssignments.length) return 0
 
   let gradedOrSubmitted = 0
   for (const a of courseAssignments) {
-    const sub = (a.submissions || []).find((s) => s.studentId === studentId)
+    const sub = submissions.find(
+      (s) => String(s.assignmentId) === String(a.id) && String(s.studentId) === String(studentId),
+    )
     if (sub?.status === 'SUBMITTED' || sub?.status === 'GRADED') gradedOrSubmitted += 1
   }
 
@@ -66,53 +82,84 @@ function computeCourseCompletion({ courseId, studentId, assignments }) {
 export default function StudentCoursesAvailable() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const studentId = user?.id
+  const studentId = user?.userId ?? user?.id
 
   const [query, setQuery] = useState('')
-
   const [model, setModel] = useState({ courses: [], enrolledCourseIds: new Set() })
+  const [loadError, setLoadError] = useState(null)
 
   useEffect(() => {
     let mounted = true
-  
+
     async function load() {
-      console.log("USER", user)
-      console.log("STUDENT ID", studentId)
-  
       if (!studentId) return
-  const enrolled = await getEnrollmentsByStudent(studentId)
-  const enrolledCourseIds = new Set(ensureArray(enrolled).map((e) => e.courseId))
 
-  let coursesRaw = await getCourses()
-  coursesRaw = ensureArray(coursesRaw)
-  console.log("coursesRaw", coursesRaw)
-      const courses = []
-      for (const c of coursesRaw) {
-        // compute completion by fetching assignments for course
-        const assigns = await getAssignmentsByCourse(c.id)
+      setLoadError(null)
 
-const completion = computeCourseCompletion({
-  courseId: c.id,
-  studentId,
-  assignments: assigns
-})
+      try {
+        let coursesRaw = ensureArray(await getCourses())
 
-courses.push({
-  id: c.id,
-  title: c.title,
-  description: c.description,
-  facultyName: c.facultyName ?? 'Faculty',
-  completion
-})
+        let enrolledCourseIds = new Set()
+        try {
+          const enrolled = await getEnrollmentsByStudent(studentId)
+          enrolledCourseIds = new Set(ensureArray(enrolled).map((e) => String(e.courseId)))
+        } catch {
+          // non-fatal
+        }
+
+        let submissions = []
+        try {
+          submissions = ensureArray(await getSubmissionsByStudent(studentId))
+        } catch {
+          submissions = []
+        }
+
+        const courses = []
+        for (const c of coursesRaw) {
+          let assigns = []
+          try {
+            assigns = ensureArray(await getAssignmentsByCourse(c.id))
+          } catch {
+            assigns = []
+          }
+
+          const completion = computeCourseCompletion({
+            courseId: c.id,
+            studentId,
+            assignments: assigns,
+            submissions,
+          })
+
+          courses.push({
+            id: c.id,
+            title: c.title,
+            description: c.description,
+            facultyName: c.facultyName ?? 'Faculty',
+            completion,
+            learningLinks: ensureArray(c.learningLinks),
+            primaryUrl: ensureArray(c.learningLinks)[0]?.url ?? null,
+          })
+        }
+
+        if (mounted) setModel({ courses, enrolledCourseIds })
+      } catch (err) {
+        if (mounted) {
+          setLoadError(err?.response?.data?.message ?? err?.message ?? 'Failed to load courses')
+          setModel({ courses: [], enrolledCourseIds: new Set() })
+        }
       }
-
-  const filtered = ensureArray(courses).filter((c) => (c.title || '').toLowerCase().includes(query.toLowerCase().trim()))
-  console.log("FINAL COURSES", filtered)
-  if (mounted) setModel({ courses: filtered, enrolledCourseIds })
     }
+
     load()
-    return () => { mounted = false }
-  }, [studentId, query])
+    return () => {
+      mounted = false
+    }
+  }, [studentId])
+
+  const visibleCourses = useMemo(() => {
+    const q = query.toLowerCase().trim()
+    return ensureArray(model.courses).filter((c) => !q || (c.title || '').toLowerCase().includes(q))
+  }, [model.courses, query])
 
   async function handleEnroll(courseId) {
     if (!studentId) return
@@ -141,22 +188,33 @@ courses.push({
             />
           </div>
         </div>
+
+        {loadError ? (
+          <div className="badge badgeDanger" style={{ marginTop: 14, display: 'block' }}>
+            {loadError}
+          </div>
+        ) : null}
       </div>
 
       <div className="grid" style={{ marginTop: 14, gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 14 }}>
-  {ensureArray(model.courses).map((course) => (
-          <CourseCard
-            key={course.id}
-            course={course}
-            progress={course.completion ?? 0}
-            enrolled={model.enrolledCourseIds.has(course.id)}
-            onEnroll={handleEnroll}
-          />
-        ))}
+        {visibleCourses.length ? (
+          visibleCourses.map((course) => (
+            <CourseCard
+              key={course.id}
+              course={course}
+              progress={course.completion ?? 0}
+              enrolled={model.enrolledCourseIds.has(String(course.id))}
+              onEnroll={handleEnroll}
+            />
+          ))
+        ) : (
+          <div className="card" style={{ padding: 16, gridColumn: '1 / -1' }}>
+            <div className="badge" style={{ opacity: 0.85 }}>
+              {loadError ? 'Could not load courses.' : 'No courses available yet. Ask faculty to create a course.'}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
 }
-
-
-

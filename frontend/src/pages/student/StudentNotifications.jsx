@@ -17,9 +17,9 @@ function timeAgo(iso) {
 
 export default function StudentNotifications() {
   const { user } = useAuth()
-  const studentId = user?.id
+  const studentId = user?.userId ?? user?.id
 
-  // tick state removed; notifications are derived directly from localStorage
+  // notifications loaded from backend API
 
 
   const [notifications, setNotifications] = useState([])

@@ -4,7 +4,7 @@ export default function FacultyProfile() {
       <div className="badge badgeAccent">Profile</div>
       <h1 style={{ fontSize: 26, marginTop: 12 }}>Faculty Profile</h1>
       <p style={{ opacity: 0.8, marginTop: 8, lineHeight: 1.7 }}>
-        Update profile fields (mock UI). Integrate with backend later.
+        Update profile fields. Backend profile API integration pending.
       </p>
 
       <div className="grid grid2" style={{ marginTop: 14 }}>
@@ -19,7 +19,7 @@ export default function FacultyProfile() {
         </div>
 
         <div className="card" style={{ padding: 14, background: 'rgba(255,255,255,.02)' }}>
-          <div style={{ fontWeight: 900 }}>Update (mock)</div>
+          <div style={{ fontWeight: 900 }}>Update</div>
           <div style={{ marginTop: 8, fontSize: 13, opacity: 0.8, lineHeight: 1.6 }}>
             This page will later call backend endpoints to update faculty info.
           </div>

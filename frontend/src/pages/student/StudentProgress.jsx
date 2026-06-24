@@ -19,7 +19,7 @@ function computeCourseCompletion({ courseId, studentId, assignments }) {
 
 export default function StudentProgress() {
   const { user } = useAuth()
-  const studentId = user?.id
+  const studentId = user?.userId ?? user?.id
 
   const [model, setModel] = useState(null)
 

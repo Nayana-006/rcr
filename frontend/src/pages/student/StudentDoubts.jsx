@@ -1,21 +1,19 @@
-import { useMemo, useState, useEffect } from 'react'
-
+import { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
-import { createDoubt, getEnrollmentsByStudent, getCourseById, getDoubtsByStudent } from '../../services/api'
-import { ensureArray } from '../../services/api'
+import { createDoubt, getEnrollmentsByStudent, getDoubtsByStudent, ensureArray } from '../../services/api'
 
-function ThreadCard({ q, reply }) {
+function ThreadCard({ thread }) {
   return (
     <div className="card" style={{ padding: 14, background: 'rgba(255,255,255,.02)' }}>
       <div style={{ fontWeight: 950, display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <span>{q.course}</span>
-        <span className="badge">{q.status}</span>
+        <span>{thread.courseTitle}</span>
+        <span className="badge">{thread.statusLabel}</span>
       </div>
-      <div style={{ marginTop: 8, fontSize: 13, opacity: 0.85, lineHeight: 1.6 }}>{q.question}</div>
-      {reply ? (
+      <div style={{ marginTop: 8, fontSize: 13, opacity: 0.85, lineHeight: 1.6 }}>{thread.question}</div>
+      {thread.reply ? (
         <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
           <div style={{ fontWeight: 900, opacity: 0.9, fontSize: 13 }}>Faculty Reply</div>
-          <div style={{ marginTop: 6, fontSize: 13, lineHeight: 1.6 }}>{reply}</div>
+          <div style={{ marginTop: 6, fontSize: 13, lineHeight: 1.6 }}>{thread.reply}</div>
         </div>
       ) : null}
     </div>
@@ -24,61 +22,56 @@ function ThreadCard({ q, reply }) {
 
 export default function StudentDoubts() {
   const { user } = useAuth()
-  const studentId = user?.id
+  const studentId = user?.userId ?? user?.id
 
   const [coursesForStudent, setCoursesForStudent] = useState([])
   const [threads, setThreads] = useState([])
+  const [courseId, setCourseId] = useState('')
+  const [question, setQuestion] = useState('')
+  const [error, setError] = useState(null)
+
+  async function loadThreads() {
+    if (!studentId) return
+    const doubts = ensureArray(await getDoubtsByStudent(studentId))
+    setThreads(doubts)
+  }
 
   useEffect(() => {
     let mounted = true
     async function load() {
       if (!studentId) return
-      const enrollments = await getEnrollmentsByStudent(studentId)
-        const courseIds = ensureArray(enrollments).map((e) => e.courseId)
-      const courseList = []
-      for (const cid of courseIds) {
-        const c = await getCourseById(cid)
-        if (c) courseList.push(c)
-      }
-
-      const doubts = await getDoubtsByStudent(studentId)
-        const mappedThreads = ensureArray(doubts).map((d) => ({
-        id: d.id,
-        course: (getCourseById(d.courseId)?.title) ?? 'Course',
-        status: d.status === 'REPLIED' ? 'Replied' : 'Pending',
-        question: d.question,
-        reply: d.reply?.text ?? null,
-      }))
-
-      if (mounted) {
-        setCoursesForStudent(courseList)
-        setThreads(mappedThreads)
+      try {
+        const enrollments = ensureArray(await getEnrollmentsByStudent(studentId))
+        const courseList = enrollments.map((e) => ({
+          id: e.courseId,
+          title: e.courseTitle ?? `Course ${e.courseId}`,
+        }))
+        const doubts = ensureArray(await getDoubtsByStudent(studentId))
+        if (mounted) {
+          setCoursesForStudent(courseList)
+          setThreads(doubts)
+          if (courseList.length && !courseId) setCourseId(String(courseList[0].id))
+        }
+      } catch (e) {
+        if (mounted) setError(e?.response?.data?.message ?? 'Failed to load doubts')
       }
     }
     load()
-    return () => { mounted = false }
+    return () => {
+      mounted = false
+    }
   }, [studentId])
 
-  const [courseId, setCourseId] = useState(null)
-  const [question, setQuestion] = useState('')
-
-
-
-
   async function submit() {
-    if (!studentId) return
-    if (!courseId) return
-    if (!question.trim()) return alert('Please type your doubt.')
-
-    const course = await getCourseById(courseId)
-    if (!course) return
-
-    await createDoubt({ studentId, facultyId: course.facultyId, courseId, question })
-    setQuestion('')
-    // refresh threads
-    const doubts = await getDoubtsByStudent(studentId)
-    const mapped = (doubts || []).map((d) => ({ id: d.id, course: (getCourseById(d.courseId)?.title) ?? 'Course', status: d.status === 'REPLIED' ? 'Replied' : 'Pending', question: d.question, reply: d.reply?.text ?? null }))
-    setThreads(mapped)
+    if (!studentId || !courseId || !question.trim()) return alert('Please select a course and type your doubt.')
+    setError(null)
+    try {
+      await createDoubt({ studentId, courseId: Number(courseId), question: question.trim() })
+      setQuestion('')
+      await loadThreads()
+    } catch (e) {
+      setError(e?.response?.data?.message ?? 'Failed to send doubt')
+    }
   }
 
   return (
@@ -87,18 +80,14 @@ export default function StudentDoubts() {
         <div className="card" style={{ padding: 16 }}>
           <div className="badge badgeAccent">Doubt Resolution</div>
           <h1 style={{ fontSize: 26, marginTop: 10 }}>Send Doubts to Faculty</h1>
-          <div style={{ opacity: 0.8, marginTop: 6, fontSize: 13, lineHeight: 1.7 }}>
-            Ask course-related questions. Faculty replies will appear in your history.
-          </div>
+          {error ? <div className="badge badgeDanger" style={{ marginTop: 12 }}>{error}</div> : null}
 
           <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div>
               <label className="label">Course</label>
-              <select className="input" value={courseId ?? ''} onChange={(e) => setCourseId(e.target.value)} disabled={!coursesForStudent.length}>
+              <select className="input" value={courseId} onChange={(e) => setCourseId(e.target.value)} disabled={!coursesForStudent.length}>
                 {coursesForStudent.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.title}
-                  </option>
+                  <option key={c.id} value={c.id}>{c.title}</option>
                 ))}
               </select>
             </div>
@@ -112,28 +101,17 @@ export default function StudentDoubts() {
                 placeholder="Type your doubt..."
               />
             </div>
-
-            <button className="btn btnPrimary" onClick={submit}>
-              Send Doubt
-            </button>
-
-            <div className="badge" style={{ opacity: 0.8 }}>
-              Your doubt is stored in localStorage.
-            </div>
+            <button type="button" className="btn btnPrimary" onClick={submit}>Send Doubt</button>
           </div>
         </div>
 
         <div className="card" style={{ padding: 16 }}>
           <div style={{ fontWeight: 950, fontSize: 18 }}>Doubt History</div>
-          <div style={{ opacity: 0.8, fontSize: 13, marginTop: 6 }}>Conversation threads between you and faculty.</div>
-
           <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
             {threads.length ? (
-              threads.map((t) => <ThreadCard key={t.id} q={t} reply={t.reply} />)
+              threads.map((t) => <ThreadCard key={t.id} thread={t} />)
             ) : (
-              <div className="badge" style={{ opacity: 0.8 }}>
-                No doubts yet. Ask your first question.
-              </div>
+              <div className="badge" style={{ opacity: 0.8 }}>No doubts yet. Ask your first question.</div>
             )}
           </div>
         </div>
@@ -141,5 +119,3 @@ export default function StudentDoubts() {
     </div>
   )
 }
-
-

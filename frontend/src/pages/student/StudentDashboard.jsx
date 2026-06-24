@@ -38,7 +38,7 @@ function computeCourseCompletion({ courseId, studentId, assignments }) {
 
 export default function StudentDashboard() {
   const { user } = useAuth()
-  const studentId = user?.id
+  const studentId = user?.userId ?? user?.id
 
   const [model, setModel] = useState(null)
 

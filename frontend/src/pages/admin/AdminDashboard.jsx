@@ -1,5 +1,6 @@
-import { useMemo, useState, useEffect } from 'react'
-import { getLocalUsers, getCourses, getEnrollmentsByCourse, ensureArray } from '../../services/api'
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { getAdminDashboard } from '../../services/api'
 
 function StatCard({ title, value, sub }) {
   return (
@@ -12,6 +13,7 @@ function StatCard({ title, value, sub }) {
 }
 
 export default function AdminDashboard() {
+  const navigate = useNavigate()
   const [model, setModel] = useState({
     totalStudents: 0,
     totalFaculty: 0,
@@ -21,50 +23,33 @@ export default function AdminDashboard() {
     activeFaculty: 0,
     enrollmentRate: 0,
   })
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     let mounted = true
     async function load() {
-      const users = getLocalUsers() ?? []
-  const courses = ensureArray(await getCourses())
-
-      const students = users.filter((u) => u.role === 'STUDENT')
-      const faculty = users.filter((u) => u.role === 'FACULTY')
-
-      let totalEnrollments = 0
-      for (const c of courses) {
-        const enrollments = ensureArray(await getEnrollmentsByCourse(c.id))
-        totalEnrollments += enrollments.filter((e) => e.status === 'ACTIVE').length
+      try {
+        const data = await getAdminDashboard()
+        if (mounted) setModel(data)
+      } catch (e) {
+        if (mounted) setError(e?.response?.data?.message ?? 'Failed to load dashboard')
       }
-
-      const activeStudents = students.filter((s) => s.active).length
-      const activeFaculty = faculty.filter((f) => f.active).length
-
-      const enrollmentRate = students.length ? Math.round((totalEnrollments / students.length) * 10) / 10 : 0
-
-      const next = {
-        totalStudents: students.length,
-        totalFaculty: faculty.length,
-        totalCourses: (courses || []).length,
-        totalEnrollments,
-        activeStudents,
-        activeFaculty,
-        enrollmentRate,
-      }
-
-      if (mounted) setModel(next)
     }
     load()
-    return () => { mounted = false }
+    return () => {
+      mounted = false
+    }
   }, [])
 
   return (
     <div>
+      {error ? <div className="badge badgeDanger" style={{ marginBottom: 14 }}>{error}</div> : null}
+
       <div className="grid" style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14 }}>
-  <StatCard title="Total Students" value={model?.totalStudents ?? 0} sub="Registered students" />
-  <StatCard title="Total Faculty" value={model?.totalFaculty ?? 0} sub="Registered faculty" />
-  <StatCard title="Total Courses" value={model?.totalCourses ?? 0} sub="All courses" />
-  <StatCard title="Total Enrollments" value={model?.totalEnrollments ?? 0} sub="Active enrollments" />
+        <StatCard title="Total Students" value={model.totalStudents} sub="Registered students" />
+        <StatCard title="Total Faculty" value={model.totalFaculty} sub="Registered faculty" />
+        <StatCard title="Total Courses" value={model.totalCourses} sub="All courses" />
+        <StatCard title="Total Enrollments" value={model.totalEnrollments} sub="Active enrollments" />
       </div>
 
       <div className="grid" style={{ marginTop: 14, gridTemplateColumns: '1.1fr .9fr', gap: 14 }}>
@@ -72,7 +57,7 @@ export default function AdminDashboard() {
           <div className="badge badgeAccent">System Statistics</div>
           <div style={{ fontWeight: 950, fontSize: 18, marginTop: 10 }}>Overall usage snapshot</div>
           <div style={{ opacity: 0.8, fontSize: 13, marginTop: 6, lineHeight: 1.7 }}>
-            Computed from localStorage data (users, courses, enrollments).
+            Live statistics from the backend dashboard API.
           </div>
 
           <div style={{ marginTop: 14, overflowX: 'auto' }}>
@@ -119,13 +104,13 @@ export default function AdminDashboard() {
           <div style={{ fontWeight: 950, fontSize: 18 }}>Quick Actions</div>
           <div style={{ opacity: 0.8, fontSize: 13, marginTop: 6 }}>Admin modules:</div>
           <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <button className="btn btnPrimary" onClick={() => alert('Open manage students (UI placeholder)')}>
+            <button type="button" className="btn btnPrimary" onClick={() => navigate('/admin/users/students')}>
               Manage Students
             </button>
-            <button className="btn" onClick={() => alert('Open manage faculty (UI placeholder)')}>
+            <button type="button" className="btn" onClick={() => navigate('/admin/users/faculty')}>
               Manage Faculty
             </button>
-            <button className="btn" onClick={() => alert('Open manage courses (UI placeholder)')}>
+            <button type="button" className="btn" onClick={() => navigate('/admin/courses')}>
               Manage Courses
             </button>
           </div>
@@ -134,5 +119,3 @@ export default function AdminDashboard() {
     </div>
   )
 }
-
-

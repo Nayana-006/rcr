@@ -20,16 +20,18 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// Auth
-export async function login({ email, password }) {
-  const resp = await api.post('/auth/login', { email, password })
-  return resp.data
-}
-
-export async function register(payload) {
-  const resp = await api.post('/auth/register', payload)
-  return resp.data
-}
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error?.response?.status === 401) {
+      localStorage.removeItem('rcs_user')
+      if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/register')) {
+        window.location.href = '/login'
+      }
+    }
+    return Promise.reject(error)
+  },
+)
 
 function normalizeArrayPayload(payload) {
   if (!payload) return []
@@ -46,6 +48,64 @@ function normalizeObjectPayload(payload, defaultObj = {}) {
   const candidate = payload.data ?? payload.content ?? payload
   if (typeof candidate !== 'object') return { ...defaultObj }
   return { ...defaultObj, ...candidate }
+}
+
+/** Parse doubt reply appended to message by backend */
+export function mapDoubtFromApi(d) {
+  if (!d) return null
+  const message = d.message ?? ''
+  const parts = message.split('\n\nReply:\n')
+  const reply = parts.length > 1 ? parts.slice(1).join('\n\nReply:\n') : null
+  const hasReply = Boolean(reply && reply.trim())
+  const status = d.status ?? 'OPEN'
+  let statusLabel = 'Pending'
+  if (status === 'RESOLVED') statusLabel = 'Resolved'
+  else if (hasReply) statusLabel = 'Replied'
+
+  return {
+    ...d,
+    question: d.title ?? parts[0] ?? message,
+    reply,
+    statusLabel,
+    courseTitle: d.courseTitle ?? 'Course',
+    studentName: d.studentName ?? 'Student',
+  }
+}
+
+export function mapNotificationFromApi(n) {
+  if (!n) return null
+  return {
+    ...n,
+    body: n.message ?? n.body ?? '',
+    read: n.readStatus ?? n.read ?? false,
+  }
+}
+
+// Auth
+export async function login({ email, password }) {
+  const resp = await api.post('/auth/login', { email, password })
+  return resp.data
+}
+
+export async function register(payload) {
+  const resp = await api.post('/auth/register', payload)
+  return resp.data
+}
+
+// Users (admin)
+export async function getUsers() {
+  const resp = await api.get('/users')
+  return normalizeArrayPayload(resp.data)
+}
+
+export async function getUsersByRole(role) {
+  const resp = await api.get(`/users/role/${role}`)
+  return normalizeArrayPayload(resp.data)
+}
+
+export async function setUserActive(userId, active) {
+  const resp = await api.patch(`/users/${userId}/active`, null, { params: { active } })
+  return resp.data
 }
 
 // Courses
@@ -111,6 +171,11 @@ export async function createAssignment(payload) {
   return resp.data
 }
 
+export async function updateAssignment(id, payload) {
+  const resp = await api.put(`/assignments/${id}`, payload)
+  return resp.data
+}
+
 export async function deleteAssignment(id) {
   const resp = await api.delete(`/assignments/${id}`)
   return resp.data
@@ -146,6 +211,21 @@ export async function gradeSubmission({ submissionId, marks, feedback }) {
 export async function markAttendance(payload) {
   const resp = await api.post('/attendance', payload)
   return resp.data
+}
+
+export async function markAttendanceBulk({ facultyId, courseId, date, records }) {
+  const results = []
+  for (const record of records) {
+    const resp = await api.post('/attendance', {
+      facultyId,
+      courseId,
+      date,
+      present: record.present,
+      studentId: record.studentId,
+    })
+    results.push(resp.data)
+  }
+  return results
 }
 
 export async function getAttendanceByStudent(studentId) {
@@ -188,48 +268,48 @@ export async function createDoubt(payload) {
     studentId: payload.studentId,
     courseId: payload.courseId,
   })
-  return resp.data
+  return mapDoubtFromApi(resp.data)
 }
 
 export async function replyToDoubt(id, message) {
   const resp = await api.put(`/doubts/${id}/reply`, null, { params: { message } })
-  return resp.data
+  return mapDoubtFromApi(resp.data)
 }
 
 export async function resolveDoubt(id) {
   const resp = await api.put(`/doubts/${id}/resolve`)
-  return resp.data
+  return mapDoubtFromApi(resp.data)
 }
 
 export async function getDoubtsByStudent(studentId) {
   const resp = await api.get(`/doubts/student/${studentId}`)
-  return normalizeArrayPayload(resp.data)
+  return normalizeArrayPayload(resp.data).map(mapDoubtFromApi)
 }
 
 export async function getDoubtsByFaculty(facultyId) {
   const resp = await api.get(`/doubts/faculty/${facultyId}`)
-  return normalizeArrayPayload(resp.data)
+  return normalizeArrayPayload(resp.data).map(mapDoubtFromApi)
 }
 
 export async function getDoubtsByCourse(courseId) {
   const resp = await api.get(`/doubts/course/${courseId}`)
-  return normalizeArrayPayload(resp.data)
+  return normalizeArrayPayload(resp.data).map(mapDoubtFromApi)
 }
 
 // Notifications
 export async function getNotificationsForUser(userId) {
   const resp = await api.get(`/notifications/user/${userId}`)
-  return normalizeArrayPayload(resp.data)
+  return normalizeArrayPayload(resp.data).map(mapNotificationFromApi)
 }
 
 export async function markNotificationRead(id) {
   const resp = await api.put(`/notifications/${id}/read`)
-  return resp.data
+  return mapNotificationFromApi(resp.data)
 }
 
 export async function createNotification(payload) {
   const resp = await api.post('/notifications', payload)
-  return resp.data
+  return mapNotificationFromApi(resp.data)
 }
 
 // Dashboard
@@ -272,14 +352,3 @@ export async function getAdminDashboard() {
 }
 
 export default api
-
-// Legacy local user list — admin pages still read from localStorage until user API exists
-export function getLocalUsers() {
-  try {
-    const raw = localStorage.getItem('rcs_users')
-    if (!raw) return []
-    return JSON.parse(raw)
-  } catch {
-    return []
-  }
-}

@@ -1,21 +1,40 @@
-import { useMemo } from 'react'
-import { getLocalUsers } from '../../services/api'
+import { useState, useEffect } from 'react'
+import { getUsersByRole, setUserActive, ensureArray } from '../../services/api'
 
 export default function AdminUsersStudents() {
-  const model = useMemo(() => {
-    const users = getLocalUsers() ?? []
-    return users
-      .filter((u) => u.role === 'STUDENT')
-      .slice()
-      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
-      .map((u) => ({ id: u.id, name: u.name ?? 'Student', email: u.email, active: !!u.active }))
+  const [students, setStudents] = useState([])
+  const [error, setError] = useState(null)
+
+  async function loadStudents() {
+    const users = ensureArray(await getUsersByRole('STUDENT'))
+    setStudents(
+      users
+        .slice()
+        .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+        .map((u) => ({ id: u.id, name: u.name ?? 'Student', email: u.email, active: !!u.active })),
+    )
+  }
+
+  useEffect(() => {
+    loadStudents().catch((e) => setError(e?.response?.data?.message ?? 'Failed to load students'))
   }, [])
+
+  async function toggleActive(student) {
+    setError(null)
+    try {
+      await setUserActive(student.id, !student.active)
+      await loadStudents()
+    } catch (e) {
+      setError(e?.response?.data?.message ?? 'Failed to update student')
+    }
+  }
 
   return (
     <div>
       <div className="card" style={{ padding: 16 }}>
         <div className="badge badgeAccent">User Management</div>
         <h1 style={{ fontSize: 26, marginTop: 10 }}>Manage Students</h1>
+        {error ? <div className="badge badgeDanger" style={{ marginTop: 12 }}>{error}</div> : null}
       </div>
 
       <div className="card" style={{ padding: 16, marginTop: 14 }}>
@@ -32,8 +51,8 @@ export default function AdminUsersStudents() {
               </tr>
             </thead>
             <tbody>
-              {model.length ? (
-                model.map((s) => (
+              {students.length ? (
+                students.map((s) => (
                   <tr key={s.id}>
                     <td>{s.name}</td>
                     <td>{s.email}</td>
@@ -43,8 +62,8 @@ export default function AdminUsersStudents() {
                       </span>
                     </td>
                     <td>
-                      <button className="btn" onClick={() => alert('Toggle student activation (UI placeholder)')}>
-                        Toggle
+                      <button type="button" className="btn" onClick={() => toggleActive(s)}>
+                        {s.active ? 'Deactivate' : 'Activate'}
                       </button>
                     </td>
                   </tr>
@@ -63,5 +82,3 @@ export default function AdminUsersStudents() {
     </div>
   )
 }
-
-

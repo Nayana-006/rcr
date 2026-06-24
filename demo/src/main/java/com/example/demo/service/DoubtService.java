@@ -14,7 +14,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -82,7 +84,16 @@ public class DoubtService {
         if (!userRepository.existsById(facultyId)) {
             throw new ResourceNotFoundException("Faculty not found with id: " + facultyId);
         }
-        return doubtRepository.findByFacultyId(facultyId).stream().map(this::toResponse).collect(Collectors.toList());
+        Map<Long, Doubt> unique = new LinkedHashMap<>();
+        for (Course course : courseRepository.findByFacultyId(facultyId)) {
+            for (Doubt doubt : doubtRepository.findByCourseId(course.getId())) {
+                unique.putIfAbsent(doubt.getId(), doubt);
+            }
+        }
+        for (Doubt doubt : doubtRepository.findByFacultyId(facultyId)) {
+            unique.putIfAbsent(doubt.getId(), doubt);
+        }
+        return unique.values().stream().map(this::toResponse).collect(Collectors.toList());
     }
 
     public List<DoubtResponse> getDoubtsByCourse(Long courseId) {

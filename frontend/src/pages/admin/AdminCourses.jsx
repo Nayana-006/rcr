@@ -26,7 +26,7 @@ export default function AdminCourses() {
       <div className="card" style={{ padding: 16 }}>
         <div className="badge badgeAccent">Course Management</div>
         <h1 style={{ fontSize: 26, marginTop: 10 }}>Manage Courses</h1>
-        <p style={{ opacity: 0.8, marginTop: 6, lineHeight: 1.7 }}>View all courses from localStorage.</p>
+        <p style={{ opacity: 0.8, marginTop: 6, lineHeight: 1.7 }}>View all courses from the backend.</p>
       </div>
 
       <div className="card" style={{ padding: 16, marginTop: 14 }}>

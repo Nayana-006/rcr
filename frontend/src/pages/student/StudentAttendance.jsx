@@ -6,7 +6,7 @@ import { ensureArray } from '../../services/api'
 
 export default function StudentAttendance() {
   const { user } = useAuth()
-  const studentId = user?.id
+  const studentId = user?.userId ?? user?.id
 
   const [model, setModel] = useState(null)
 

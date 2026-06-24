@@ -5,6 +5,7 @@ import {
   getAssignmentsByCourse,
   gradeSubmission,
   createAssignment,
+  updateAssignment,
   deleteAssignment,
   getSubmissionsByAssignment,
   ensureArray,
@@ -17,7 +18,7 @@ function SubmissionBadge({ status }) {
 
 export default function FacultyAssignments() {
   const { user } = useAuth()
-  const facultyId = user?.id
+  const facultyId = user?.userId ?? user?.id
 
   const [model, setModel] = useState({ courses: [], assignments: [] })
   const [activeId, setActiveId] = useState(null)
@@ -47,34 +48,35 @@ export default function FacultyAssignments() {
 
   const [grade, setGrade] = useState('')
   const [submissions, setSubmissions] = useState([])
+  const [error, setError] = useState(null)
+  const [editing, setEditing] = useState(false)
 
   useEffect(() => {
-    let mounted = true
-    async function loadSubmissions() {
-      if (!active?.id) {
-        if (mounted) setSubmissions([])
-        return
-      }
-      const subs = ensureArray(await getSubmissionsByAssignment(active.id))
-      if (mounted) {
-        setSubmissions(
-          subs.map((s) => ({
-            id: s.id,
-            studentName: s.studentName ?? 'Student',
-            studentId: s.studentId,
-            status: s.status,
-            text: s.feedback ?? '',
-            grade: s.grade,
-            feedback: s.feedback,
-          })),
-        )
-      }
-    }
-    loadSubmissions()
-    return () => {
-      mounted = false
+    if (active) {
+      setTitle(active.title ?? '')
+      setDescription(active.description ?? '')
+      setDueDate(active.dueDate ? active.dueDate.slice(0, 10) : '')
+      setCourseId(String(active.courseId ?? ''))
     }
   }, [active?.id])
+
+  async function reloadSubmissions(assignmentId) {
+    if (!assignmentId) {
+      setSubmissions([])
+      return
+    }
+    const subs = ensureArray(await getSubmissionsByAssignment(assignmentId))
+    setSubmissions(
+      subs.map((s) => ({
+        id: s.id,
+        studentName: s.studentName ?? 'Student',
+        studentId: s.studentId,
+        status: s.status,
+        text: s.feedback ?? '',
+        grade: s.grade,
+      })),
+    )
+  }
 
   function ensureActiveCourse() {
     const firstCourseId = model.courses[0]?.id
@@ -94,6 +96,10 @@ export default function FacultyAssignments() {
     return assignments
   }
 
+  useEffect(() => {
+    reloadSubmissions(active?.id).catch(() => setSubmissions([]))
+  }, [active?.id])
+
   async function handleCreateAssignment() {
     const cid = ensureActiveCourse()
     if (!cid) return alert('Create a course first.')
@@ -101,20 +107,46 @@ export default function FacultyAssignments() {
     const t = title.trim()
     if (!t) return alert('Assignment title is required.')
 
-    const payload = {
-      courseId: Number(cid),
-      title: t,
-      description: description.trim(),
-      dueDate: dueDate ? new Date(dueDate).toISOString() : null,
-    }
+    setError(null)
+    try {
+      const payload = {
+        courseId: Number(cid),
+        title: t,
+        description: description.trim(),
+        dueDate: dueDate ? new Date(dueDate).toISOString() : null,
+      }
 
-    await createAssignment(payload)
-    const assignments = await reloadAssignments()
-    setActiveId(assignments[0]?.id ?? null)
-    setTitle('')
-    setDescription('')
-    setDueDate('')
-    setMaxMarks('10')
+      await createAssignment(payload)
+      const assignments = await reloadAssignments()
+      setActiveId(assignments[0]?.id ?? null)
+      setTitle('')
+      setDescription('')
+      setDueDate('')
+      setMaxMarks('10')
+      setEditing(false)
+    } catch (e) {
+      setError(e?.response?.data?.message ?? 'Failed to create assignment')
+    }
+  }
+
+  async function handleUpdateAssignment() {
+    if (!active) return
+    const t = title.trim()
+    if (!t) return alert('Assignment title is required.')
+    setError(null)
+    try {
+      await updateAssignment(active.id, {
+        courseId: Number(courseId || active.courseId),
+        title: t,
+        description: description.trim(),
+        dueDate: dueDate ? new Date(dueDate).toISOString() : null,
+      })
+      await reloadAssignments()
+      setEditing(false)
+      setActiveId(active.id)
+    } catch (e) {
+      setError(e?.response?.data?.message ?? 'Failed to update assignment')
+    }
   }
 
   async function handleGradeSubmission(submission) {
@@ -122,21 +154,31 @@ export default function FacultyAssignments() {
     const marks = Number(grade)
     if (!Number.isFinite(marks)) return alert('Enter grade number (0-10).')
 
-    await gradeSubmission({
-      submissionId: submission.id,
-      marks,
-      feedback: '',
-    })
-
-    setGrade('')
-    setActiveId(active.id)
+    setError(null)
+    try {
+      await gradeSubmission({
+        submissionId: submission.id,
+        marks,
+        feedback: submission.text ?? '',
+      })
+      setGrade('')
+      await reloadSubmissions(active.id)
+    } catch (e) {
+      setError(e?.response?.data?.message ?? 'Failed to grade submission')
+    }
   }
 
   async function handleDeleteAssignment(id) {
     if (!confirm('Delete this assignment?')) return
-    await deleteAssignment(id)
-    await reloadAssignments()
-    setActiveId(null)
+    setError(null)
+    try {
+      await deleteAssignment(id)
+      await reloadAssignments()
+      setActiveId(null)
+      setEditing(false)
+    } catch (e) {
+      setError(e?.response?.data?.message ?? 'Failed to delete assignment')
+    }
   }
 
   function courseTitle(courseId) {
@@ -149,6 +191,7 @@ export default function FacultyAssignments() {
         <div className="badge badgeAccent">Assignments</div>
         <h1 style={{ fontSize: 26, marginTop: 10 }}>Create & Grade Assignments</h1>
         <p style={{ opacity: 0.8, marginTop: 6, lineHeight: 1.7 }}>Manage assignments and grade student submissions via the backend API.</p>
+        {error ? <div className="badge badgeDanger" style={{ marginTop: 12 }}>{error}</div> : null}
       </div>
 
       <div className="grid" style={{ marginTop: 14, gridTemplateColumns: '0.95fr 1.05fr', gap: 14 }}>
@@ -210,9 +253,19 @@ export default function FacultyAssignments() {
               </div>
             </div>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              <button className="btn btnPrimary" onClick={handleCreateAssignment}>Create</button>
+              {editing ? (
+                <>
+                  <button type="button" className="btn btnPrimary" onClick={handleUpdateAssignment}>Save Changes</button>
+                  <button type="button" className="btn" onClick={() => setEditing(false)}>Cancel</button>
+                </>
+              ) : (
+                <button type="button" className="btn btnPrimary" onClick={handleCreateAssignment}>Create</button>
+              )}
               {active && (
-                <button className="btn" onClick={() => handleDeleteAssignment(active.id)}>Delete Active</button>
+                <>
+                  <button type="button" className="btn" onClick={() => setEditing(true)}>Edit Active</button>
+                  <button type="button" className="btn" onClick={() => handleDeleteAssignment(active.id)}>Delete Active</button>
+                </>
               )}
             </div>
           </div>

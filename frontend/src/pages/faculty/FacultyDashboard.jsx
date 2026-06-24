@@ -29,7 +29,7 @@ function computeStudentCourseCompletion({ studentId, courseId, assignments }) {
 
 export default function FacultyDashboard() {
   const { user } = useAuth()
-  const facultyId = user?.id
+  const facultyId = user?.userId ?? user?.id
   const [model, setModel] = useState({ totalCourses: 0, totalStudents: 0, assignmentRate: 0, attendanceAvg: 0, recentDoubts: [], studentProgress: [] })
 
   useEffect(() => {

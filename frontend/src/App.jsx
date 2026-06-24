@@ -64,6 +64,7 @@ function App() {
           <Route path="/about" element={<AboutPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/forgot" element={<Navigate to="/login" replace />} />
 
           <Route path="/role" element={<DashboardRedirectByRole />} />
 
@@ -77,6 +78,7 @@ function App() {
                   <Route path="" element={<Navigate to="dashboard" replace />} />
                   <Route path="profile" element={<StudentProfile />} />
                   <Route path="courses" element={<StudentCourses />} />
+                  <Route path="courses/available" element={<Navigate to="/student/courses" replace />} />
                   <Route path="courses/my" element={<StudentMyCourses />} />
                   <Route path="assignments" element={<StudentAssignments />} />
                   <Route path="attendance" element={<StudentAttendance />} />
@@ -118,6 +120,7 @@ function App() {
                   <Route path="users/students" element={<AdminUsersStudents />} />
                   <Route path="users/faculty" element={<AdminUsersFaculty />} />
                   <Route path="courses" element={<AdminCourses />} />
+                  <Route path="statistics" element={<Navigate to="/admin/dashboard" replace />} />
                 </Routes>
               </ProtectedRoute>
             }
