@@ -2,6 +2,8 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/useAuth'
 import Sidebar from '../components/sidebar/Sidebar'
 import Topbar from '../components/topbar/Topbar'
+import ChatbotWidget from '../components/ChatbotWidget'
+
 
 export default function AppLayout() {
   const location = useLocation()
@@ -32,6 +34,8 @@ export default function AppLayout() {
           ) : null}
           <Outlet />
         </main>
+
+        <ChatbotWidget />
 
         <footer style={{ padding: '18px 16px', opacity: 0.75 }}>
           <div className="container" style={{ padding: 0, maxWidth: 1200 }}>

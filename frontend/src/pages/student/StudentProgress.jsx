@@ -1,21 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { CircularProgress, LinearProgress } from '../../components/charts/ProgressBars'
-import { getEnrollmentsByStudent, getCourseById, getAssignmentsByCourse, getAttendancePercentByStudentCourse } from '../../services/api'
-
-
-function computeCourseCompletion({ courseId, studentId, assignments }) {
-  const courseAssignments = assignments.filter((a) => a.courseId === courseId)
-  if (!courseAssignments.length) return 0
-
-  let gradedOrSubmitted = 0
-  for (const a of courseAssignments) {
-    const sub = (a.submissions || []).find((s) => s.studentId === studentId)
-    if (sub?.status === 'SUBMITTED' || sub?.status === 'GRADED') gradedOrSubmitted += 1
-  }
-
-  return Math.round((gradedOrSubmitted / courseAssignments.length) * 100)
-}
+import { getEnrollmentsByStudent, getCourseById, getAttendancePercentByStudentCourse, getProgressByStudent, ensureArray } from '../../services/api'
 
 export default function StudentProgress() {
   const { user } = useAuth()
@@ -27,19 +13,15 @@ export default function StudentProgress() {
     let mounted = true
     async function load() {
       if (!studentId) return
-      let enrollments = await getEnrollmentsByStudent(studentId)
-      // normalize enrollments to an array shape to avoid runtime .map on non-arrays
-      if (!Array.isArray(enrollments)) {
-        enrollments = enrollments?.data || enrollments?.content || []
-      }
+      const enrollments = ensureArray(await getEnrollmentsByStudent(studentId))
+      const progressRecords = ensureArray(await getProgressByStudent(studentId))
       const courseIds = (enrollments || []).map((e) => e.courseId)
       const courses = []
       for (const cid of courseIds) {
         const c = await getCourseById(cid)
         if (!c) continue
-        let assignments = await getAssignmentsByCourse(cid)
-        if (!Array.isArray(assignments)) assignments = assignments?.data || assignments?.content || []
-        const completion = computeCourseCompletion({ courseId: cid, studentId, assignments })
+        const progress = progressRecords.find((p) => String(p.courseId) === String(cid))
+        const completion = progress?.progressPercent ?? 0
         const att = await getAttendancePercentByStudentCourse(studentId, cid)
         const attendancePercent = att?.percent ?? 0
         courses.push({ id: c.id, title: c.title, completion, attendance: attendancePercent, status: completion >= 100 ? 'Completed' : 'Ongoing' })
@@ -129,7 +111,7 @@ export default function StudentProgress() {
           <div className="card" style={{ marginTop: 14, padding: 14, background: 'rgba(255,255,255,.02)' }}>
             <div style={{ fontWeight: 900 }}>How completion is calculated</div>
             <div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.7, opacity: 0.8 }}>
-              Completion % is based on the number of assignments you have submitted (or graded) compared to total assignments in that course.
+              Completion reaches 100% after you open a course learning link for the first time.
             </div>
           </div>
         </div>

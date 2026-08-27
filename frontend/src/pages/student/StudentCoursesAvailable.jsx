@@ -5,12 +5,12 @@ import {
   enrollStudent,
   getCourses,
   getEnrollmentsByStudent,
-  getAssignmentsByCourse,
-  getSubmissionsByStudent,
+  getProgressByStudent,
+  markCourseOpened,
   ensureArray,
 } from '../../services/api'
 
-function CourseCard({ course, progress, onEnroll, enrolled }) {
+function CourseCard({ course, progress, onEnroll, onOpen, enrolled }) {
   const primaryUrl = course.primaryUrl
 
   return (
@@ -51,7 +51,7 @@ function CourseCard({ course, progress, onEnroll, enrolled }) {
           {enrolled ? 'Enrolled' : 'Enroll'}
         </button>
         {enrolled && primaryUrl ? (
-          <a className="btn btnPrimary" href={primaryUrl} target="_blank" rel="noreferrer">
+          <a className="btn btnPrimary" href={primaryUrl} target="_blank" rel="noreferrer" onClick={() => onOpen(course.id)}>
             Open Course
           </a>
         ) : (
@@ -62,21 +62,6 @@ function CourseCard({ course, progress, onEnroll, enrolled }) {
       </div>
     </div>
   )
-}
-
-function computeCourseCompletion({ courseId, studentId, assignments, submissions }) {
-  const courseAssignments = assignments.filter((a) => String(a.courseId) === String(courseId))
-  if (!courseAssignments.length) return 0
-
-  let gradedOrSubmitted = 0
-  for (const a of courseAssignments) {
-    const sub = submissions.find(
-      (s) => String(s.assignmentId) === String(a.id) && String(s.studentId) === String(studentId),
-    )
-    if (sub?.status === 'SUBMITTED' || sub?.status === 'GRADED') gradedOrSubmitted += 1
-  }
-
-  return Math.round((gradedOrSubmitted / courseAssignments.length) * 100)
 }
 
 export default function StudentCoursesAvailable() {
@@ -107,28 +92,17 @@ export default function StudentCoursesAvailable() {
           // non-fatal
         }
 
-        let submissions = []
+        let progressRecords = []
         try {
-          submissions = ensureArray(await getSubmissionsByStudent(studentId))
+          progressRecords = ensureArray(await getProgressByStudent(studentId))
         } catch {
-          submissions = []
+          progressRecords = []
         }
 
         const courses = []
         for (const c of coursesRaw) {
-          let assigns = []
-          try {
-            assigns = ensureArray(await getAssignmentsByCourse(c.id))
-          } catch {
-            assigns = []
-          }
-
-          const completion = computeCourseCompletion({
-            courseId: c.id,
-            studentId,
-            assignments: assigns,
-            submissions,
-          })
+          const progress = progressRecords.find((p) => String(p.courseId) === String(c.id))
+          const completion = progress?.progressPercent ?? 0
 
           courses.push({
             id: c.id,
@@ -165,6 +139,19 @@ export default function StudentCoursesAvailable() {
     if (!studentId) return
     await enrollStudent({ studentId, courseId })
     navigate('/student/courses/my')
+  }
+
+  async function handleOpenCourse(courseId) {
+    if (!studentId || !courseId) return
+    setModel((prev) => ({
+      ...prev,
+      courses: prev.courses.map((c) => String(c.id) === String(courseId) ? { ...c, completion: 100 } : c),
+    }))
+    try {
+      await markCourseOpened({ studentId, courseId })
+    } catch {
+      // Keep the navigation responsive; the backend remains the source on refresh.
+    }
   }
 
   return (
@@ -205,6 +192,7 @@ export default function StudentCoursesAvailable() {
               progress={course.completion ?? 0}
               enrolled={model.enrolledCourseIds.has(String(course.id))}
               onEnroll={handleEnroll}
+              onOpen={handleOpenCourse}
             />
           ))
         ) : (

@@ -5,7 +5,6 @@ import com.example.demo.dto.AttendanceResponse;
 import com.example.demo.entity.Attendance;
 import com.example.demo.entity.Course;
 import com.example.demo.entity.User;
-import com.example.demo.exception.DuplicateResourceException;
 import com.example.demo.exception.ResourceNotFoundException;
 import com.example.demo.repository.AttendanceRepository;
 import com.example.demo.repository.CourseRepository;
@@ -38,8 +37,12 @@ public class AttendanceService {
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found with id: " + req.getCourseId()));
 
         LocalDate date = req.getDate();
-        if (attendanceRepository.findByStudentIdAndCourseIdAndDate(student.getId(), course.getId(), date).isPresent()) {
-            throw new DuplicateResourceException("Attendance already marked for this student/course/date");
+        var existing = attendanceRepository.findByStudentIdAndCourseIdAndDate(student.getId(), course.getId(), date);
+        if (existing.isPresent()) {
+            Attendance attendance = existing.get();
+            attendance.setPresent(req.getPresent());
+            attendance.setFaculty(faculty);
+            return toResponse(attendanceRepository.save(attendance));
         }
 
         Attendance a = Attendance.builder()

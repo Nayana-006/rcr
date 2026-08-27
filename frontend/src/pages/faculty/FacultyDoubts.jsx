@@ -32,15 +32,26 @@ export default function FacultyDoubts() {
   const [reply, setReply] = useState('')
   const [error, setError] = useState(null)
 
-  async function loadDoubts() {
+  useEffect(() => {
+    if (!facultyId) return
+    let mounted = true
+    async function load() {
+      try {
+        const ds = ensureArray(await getDoubtsByFaculty(facultyId))
+        if (mounted) setDoubts(ds)
+      } catch (e) {
+        if (mounted) setError(e?.response?.data?.message ?? 'Failed to load doubts')
+      }
+    }
+    load()
+    return () => { mounted = false }
+  }, [facultyId])
+
+  async function reload() {
     if (!facultyId) return
     const ds = ensureArray(await getDoubtsByFaculty(facultyId))
     setDoubts(ds)
   }
-
-  useEffect(() => {
-    loadDoubts().catch((e) => setError(e?.response?.data?.message ?? 'Failed to load doubts'))
-  }, [facultyId])
 
   const active = doubts.find((d) => String(d.id) === String(activeId)) ?? doubts[0] ?? null
 
@@ -50,7 +61,7 @@ export default function FacultyDoubts() {
     try {
       await replyToDoubt(active.id, reply.trim())
       setReply('')
-      await loadDoubts()
+      await reload()
       setActiveId(active.id)
     } catch (e) {
       setError(e?.response?.data?.message ?? 'Failed to send reply')

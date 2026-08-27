@@ -20,6 +20,7 @@ import StudentAttendance from './pages/student/StudentAttendance'
 import StudentProgress from './pages/student/StudentProgress'
 import StudentDoubts from './pages/student/StudentDoubts'
 import StudentNotifications from './pages/student/StudentNotifications'
+import StudentQuizzes from './pages/student/StudentQuizzes'
 
 // Faculty
 import FacultyDashboard from './pages/faculty/FacultyDashboard'
@@ -29,6 +30,8 @@ import FacultyAssignments from './pages/faculty/FacultyAssignments'
 import FacultyAttendance from './pages/faculty/FacultyAttendance'
 import FacultyStudentProgress from './pages/faculty/FacultyStudentProgress'
 import FacultyDoubts from './pages/faculty/FacultyDoubts'
+import FacultyQuizzes from './pages/faculty/FacultyQuizzes'
+
 
 // Admin
 import AdminDashboard from './pages/admin/AdminDashboard'
@@ -81,6 +84,7 @@ function App() {
                   <Route path="courses/available" element={<Navigate to="/student/courses" replace />} />
                   <Route path="courses/my" element={<StudentMyCourses />} />
                   <Route path="assignments" element={<StudentAssignments />} />
+                  <Route path="quizzes" element={<StudentQuizzes />} />
                   <Route path="attendance" element={<StudentAttendance />} />
                   <Route path="progress" element={<StudentProgress />} />
                   <Route path="doubts" element={<StudentDoubts />} />
@@ -101,6 +105,7 @@ function App() {
                   <Route path="profile" element={<FacultyProfile />} />
                   <Route path="courses" element={<FacultyCourses />} />
                   <Route path="assignments" element={<FacultyAssignments />} />
+                  <Route path="quizzes" element={<FacultyQuizzes />} />
                   <Route path="attendance" element={<FacultyAttendance />} />
                   <Route path="student-progress" element={<FacultyStudentProgress />} />
                   <Route path="doubts" element={<FacultyDoubts />} />

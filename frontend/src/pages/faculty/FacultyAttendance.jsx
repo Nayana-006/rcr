@@ -27,7 +27,10 @@ export default function FacultyAttendance() {
     async function load() {
       if (!facultyId) return
       const courses = ensureArray(await getCoursesByFaculty(facultyId))
-      if (mounted) setModel({ courses })
+      if (mounted) {
+        setModel({ courses })
+        setCourseId((current) => current || String(courses[0]?.id ?? ''))
+      }
     }
     load()
     return () => {
@@ -104,6 +107,12 @@ export default function FacultyAttendance() {
       setToast('Attendance saved')
       setPresentIds(new Set())
       setSessionDate('')
+      const refreshed = []
+      for (const s of students) {
+        const pct = await getAttendancePercentByStudentCourse(s.id, courseId)
+        refreshed.push({ studentId: s.id, name: s.name, ...pct })
+      }
+      setPercentByStudent(refreshed)
     } catch (e) {
       setError(e?.response?.data?.message ?? 'Failed to save attendance')
     } finally {
@@ -127,7 +136,7 @@ export default function FacultyAttendance() {
           <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
             <div>
               <label className="label">Course</label>
-              <select className="input" value={courseId || (model.courses[0]?.id ?? '')} onChange={(e) => setCourseId(e.target.value)}>
+              <select className="input" value={courseId} onChange={(e) => setCourseId(e.target.value)}>
                 {model.courses.map((c) => (
                   <option key={c.id} value={c.id}>{c.title}</option>
                 ))}

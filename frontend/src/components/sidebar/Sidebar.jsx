@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Users, BookOpen, CalendarDays, MessageCircle, Bell, User, Pencil } from 'lucide-react'
+import { LayoutDashboard, Users, BookOpen, CalendarDays, MessageCircle, Bell, User, Pencil, ClipboardCheck } from 'lucide-react'
 import { useAuth } from '../../context/useAuth'
 
 const baseItemStyle = {
@@ -21,6 +21,7 @@ export default function Sidebar({ onLogout }) {
     { to: '/student/courses', label: 'Available Courses', icon: BookOpen },
     { to: '/student/courses/my', label: 'My Courses', icon: BookOpen },
     { to: '/student/assignments', label: 'Assignments', icon: Pencil },
+    { to: '/student/quizzes', label: 'Quizzes', icon: ClipboardCheck },
     { to: '/student/attendance', label: 'Attendance', icon: CalendarDays },
     { to: '/student/progress', label: 'Course Progress', icon: BookOpen },
     { to: '/student/doubts', label: 'Doubts & Replies', icon: MessageCircle },
@@ -32,10 +33,12 @@ export default function Sidebar({ onLogout }) {
     { to: '/faculty/profile', label: 'Profile', icon: User },
     { to: '/faculty/courses', label: 'Manage Courses', icon: BookOpen },
     { to: '/faculty/assignments', label: 'Manage Assignments', icon: Pencil },
+    { to: '/faculty/quizzes', label: 'Manage Quizzes', icon: ClipboardCheck },
     { to: '/faculty/attendance', label: 'Attendance Management', icon: CalendarDays },
     { to: '/faculty/student-progress', label: 'Student Progress', icon: BookOpen },
     { to: '/faculty/doubts', label: 'Doubts Management', icon: MessageCircle },
   ]
+
 
   const adminItems = [
     { to: '/admin', label: 'Dashboard', icon: LayoutDashboard },

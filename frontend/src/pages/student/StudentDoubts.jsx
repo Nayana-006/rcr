@@ -60,7 +60,7 @@ export default function StudentDoubts() {
     return () => {
       mounted = false
     }
-  }, [studentId])
+  }, [studentId, courseId])
 
   async function submit() {
     if (!studentId || !courseId || !question.trim()) return alert('Please select a course and type your doubt.')

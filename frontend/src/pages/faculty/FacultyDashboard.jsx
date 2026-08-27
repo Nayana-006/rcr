@@ -1,7 +1,7 @@
-import { useMemo, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { CircularProgress } from '../../components/charts/ProgressBars'
-import { getCoursesByFaculty, getEnrollmentsByCourse, getAttendanceByStudent, getAttendancePercentByStudentCourse, getDoubtsByFaculty, getAssignmentsByCourse, getCourseById, ensureArray } from '../../services/api'
+import { getCoursesByFaculty, getEnrollmentsByCourse, getAttendancePercentByStudentCourse, getDoubtsByFaculty, getAssignmentsByCourse, getCourseById, ensureArray } from '../../services/api'
 
 
 function StatCard({ title, value, sub }) {

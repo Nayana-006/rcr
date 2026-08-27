@@ -4,34 +4,21 @@ import { LinearProgress } from '../../components/charts/ProgressBars'
 import {
   getEnrollmentsByStudent,
   getCourseById,
-  getAssignmentsByCourse,
-  getSubmissionsByStudent,
   getAttendancePercentByStudentCourse,
+  getProgressByStudent,
+  markCourseOpened,
   ensureArray,
 } from '../../services/api'
 
-function MaterialLink({ id, label, href }) {
+function MaterialLink({ label, href, onOpen }) {
   return (
-    <a className="card" style={{ padding: 12, textDecoration: 'none' }} href={href} target="_blank" rel="noreferrer">
+    <a className="card" style={{ padding: 12, textDecoration: 'none' }} href={href} target="_blank" rel="noreferrer" onClick={onOpen}>
       <div style={{ fontWeight: 900 }}>{label}</div>
       <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>{href}</div>
     </a>
   )
 }
 
-function computeCourseCompletion({ courseId, studentId, assignments, submissions }) {
-  const courseAssignments = assignments.filter((a) => String(a.courseId) === String(courseId))
-  if (!courseAssignments.length) return 0
-
-  let gradedOrSubmitted = 0
-  for (const a of courseAssignments) {
-    const sub = submissions.find(
-      (s) => String(s.assignmentId) === String(a.id) && String(s.studentId) === String(studentId),
-    )
-    if (sub?.status === 'SUBMITTED' || sub?.status === 'GRADED') gradedOrSubmitted += 1
-  }
-  return Math.round((gradedOrSubmitted / courseAssignments.length) * 100)
-}
 
 export default function StudentMyCourses() {
   const { user } = useAuth()
@@ -48,19 +35,14 @@ export default function StudentMyCourses() {
       setError(null)
       try {
         const enrollments = ensureArray(await getEnrollmentsByStudent(studentId))
-        const submissions = ensureArray(await getSubmissionsByStudent(studentId))
+        const progressRecords = ensureArray(await getProgressByStudent(studentId))
         const courses = []
 
         for (const e of enrollments) {
           const c = await getCourseById(e.courseId)
           if (!c) continue
-          const assignments = ensureArray(await getAssignmentsByCourse(e.courseId))
-          const completion = computeCourseCompletion({
-            courseId: e.courseId,
-            studentId,
-            assignments,
-            submissions,
-          })
+          const progress = progressRecords.find((p) => String(p.courseId) === String(e.courseId))
+          const completion = progress?.progressPercent ?? 0
           const att = await getAttendancePercentByStudentCourse(studentId, e.courseId)
           const materials = ensureArray(c.learningLinks).map((l) => ({
             id: l.id,
@@ -79,8 +61,14 @@ export default function StudentMyCourses() {
           })
         }
 
-        const active = courses.find((c) => String(c.id) === String(activeId)) ?? courses[0] ?? null
-        if (mounted) setModel({ courses, active })
+        if (!mounted) return
+        setModel(() => {
+          const nextCourses = courses
+          const nextActive = activeId != null
+            ? nextCourses.find((c) => String(c.id) === String(activeId)) ?? nextCourses[0] ?? null
+            : nextCourses[0] ?? null
+          return { courses: nextCourses, active: nextActive }
+        })
       } catch (e) {
         if (mounted) setError(e?.response?.data?.message ?? 'Failed to load courses')
       }
@@ -89,11 +77,37 @@ export default function StudentMyCourses() {
     return () => {
       mounted = false
     }
-  }, [studentId, activeId])
+    // Intentionally only reload when studentId changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [studentId])
+
+
 
   const active = model.active
 
+  async function handleOpenCourse(courseId) {
+    if (!studentId || !courseId) return
+
+    setModel((prev) => {
+      const nextCourses = prev.courses.map((c) =>
+        String(c.id) === String(courseId) ? { ...c, completion: 100 } : c,
+      )
+      const nextActive =
+        prev.active && String(prev.active.id) === String(courseId)
+          ? { ...prev.active, completion: 100 }
+          : prev.active
+      return { ...prev, courses: nextCourses, active: nextActive }
+    })
+
+    try {
+      await markCourseOpened({ studentId, courseId })
+    } catch {
+      // The link still opens; backend remains the source on next load.
+    }
+  }
+
   return (
+
     <div>
       <div className="card" style={{ padding: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
@@ -134,7 +148,7 @@ export default function StudentMyCourses() {
 
             {active?.primaryUrl ? (
               <div style={{ marginTop: 14 }}>
-                <a className="btn btnPrimary" href={active.primaryUrl} target="_blank" rel="noreferrer">
+                <a className="btn btnPrimary" href={active.primaryUrl} target="_blank" rel="noreferrer" onClick={() => handleOpenCourse(active.id)}>
                   Open Course
                 </a>
               </div>
@@ -163,8 +177,9 @@ export default function StudentMyCourses() {
             <div style={{ opacity: 0.8, fontSize: 13, marginTop: 6 }}>Click to open external learning links.</div>
             <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
               {(active?.materials || []).map((m) => (
-                <MaterialLink key={m.id ?? m.href} id={m.id} label={m.label} href={m.href} />
+                <MaterialLink key={m.id ?? m.href} label={m.label} href={m.href} onOpen={() => handleOpenCourse(active.id)} />
               ))}
+
               {active && (!active.materials || active.materials.length === 0) && (
                 <div className="badge" style={{ opacity: 0.75 }}>Faculty has not added learning links yet.</div>
               )}

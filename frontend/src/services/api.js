@@ -160,6 +160,27 @@ export async function getEnrollmentsByCourse(courseId) {
   return normalizeArrayPayload(resp.data)
 }
 
+// Course Progress
+export async function getProgressByStudent(studentId) {
+  const resp = await api.get(`/progress/student/${studentId}`)
+  return normalizeArrayPayload(resp.data)
+}
+
+export async function getProgressByStudentCourse(studentId, courseId) {
+  const resp = await api.get(`/progress/student/${studentId}/course/${courseId}`)
+  return normalizeObjectPayload(resp.data, {
+    studentId,
+    courseId,
+    progressPercent: 0,
+    lastAccessed: null,
+  })
+}
+
+export async function markCourseOpened({ studentId, courseId }) {
+  const resp = await api.post('/progress/open', { studentId, courseId })
+  return resp.data
+}
+
 // Assignments & Submissions
 export async function getAssignmentsByCourse(courseId) {
   const resp = await api.get(`/assignments/course/${courseId}`)
@@ -241,18 +262,22 @@ export async function getAttendanceByStudent(studentId) {
 export async function getAttendancePercentByStudentCourse(studentId, courseId) {
   const records = normalizeArrayPayload(await getAttendanceByStudent(studentId))
   const courseRecords = records.filter((r) => String(r.courseId) === String(courseId))
-  if (courseRecords.length) {
-    const presentCount = courseRecords.filter((r) => r.present).length
-    return {
-      percent: Math.round((presentCount / courseRecords.length) * 100),
-      total: courseRecords.length,
-      presentCount,
-    }
+  const presentCount = courseRecords.filter((r) => r.present).length
+  return {
+    percent: courseRecords.length ? Math.round((presentCount / courseRecords.length) * 100) : 0,
+    total: courseRecords.length,
+    presentCount,
   }
+}
 
-  const resp = await api.get(`/attendance/student/${studentId}/percentage`)
-  const overall = typeof resp.data === 'number' ? resp.data : 0
-  return { percent: Math.round(overall), total: 0, presentCount: 0 }
+export async function getAttendancePercentByStudent(studentId) {
+  const records = normalizeArrayPayload(await getAttendanceByStudent(studentId))
+  const presentCount = records.filter((r) => r.present).length
+  return {
+    percent: records.length ? Math.round((presentCount / records.length) * 100) : 0,
+    total: records.length,
+    presentCount,
+  }
 }
 
 export async function getAttendanceByCourse(courseId) {
@@ -307,6 +332,9 @@ export async function markNotificationRead(id) {
   return mapNotificationFromApi(resp.data)
 }
 
+
+
+
 export async function createNotification(payload) {
   const resp = await api.post('/notifications', payload)
   return mapNotificationFromApi(resp.data)
@@ -351,4 +379,90 @@ export async function getAdminDashboard() {
   })
 }
 
+// Quizzes
+export async function getQuizzesByCourse(courseId) {
+  const resp = await api.get(`/quizzes/course/${courseId}`)
+  return normalizeArrayPayload(resp.data)
+}
+
+export async function getQuizById(id) {
+  const resp = await api.get(`/quizzes/${id}`)
+  return resp.data
+}
+
+export async function createQuiz(payload) {
+  const resp = await api.post('/quizzes', payload)
+  return resp.data
+}
+
+export async function updateQuiz(id, payload) {
+  const resp = await api.put(`/quizzes/${id}`, payload)
+  return resp.data
+}
+
+export async function deleteQuiz(id) {
+  const resp = await api.delete(`/quizzes/${id}`)
+  return resp.data
+}
+
+// Questions
+export async function getQuestionsByQuiz(quizId) {
+  const resp = await api.get(`/quizzes/${quizId}/questions`)
+  return normalizeArrayPayload(resp.data)
+}
+
+export async function addQuizQuestion(quizId, payload) {
+  const resp = await api.post(`/quizzes/${quizId}/questions`, payload)
+  return resp.data
+}
+
+export async function deleteQuizQuestion(questionId) {
+  const resp = await api.delete(`/quizzes/questions/${questionId}`)
+  return resp.data
+}
+
+// Attempts
+export async function submitQuizAttempt(quizId, payload) {
+  const resp = await api.post(`/quizzes/${quizId}/attempt`, {
+    answersJson: payload.answersJson,
+    studentId: payload.studentId,
+  })
+  return resp.data
+}
+
+export async function getAttemptsByStudent(studentId) {
+  const resp = await api.get(`/quizzes/student/${studentId}/attempts`)
+  return normalizeArrayPayload(resp.data)
+}
+
+export async function getAttemptsByQuiz(quizId) {
+  const resp = await api.get(`/quizzes/${quizId}/attempts`)
+  return normalizeArrayPayload(resp.data)
+}
+
+export async function getAttemptsByQuizAndStudent(quizId, studentId) {
+  const resp = await api.get(`/quizzes/${quizId}/student/${studentId}/attempts`)
+  return normalizeArrayPayload(resp.data)
+}
+
+// Chatbot
+export async function sendMessageToChatbot(payload) {
+  const resp = await api.post('/chatbot/message', {
+    message: payload.message,
+    studentId: payload.studentId,
+  })
+  return resp.data
+}
+
+export async function getChatbotHistory(studentId) {
+  const resp = await api.get(`/chatbot/history/${studentId}`)
+  return normalizeArrayPayload(resp.data)
+}
+
+export async function clearChatbotHistory(studentId) {
+  const resp = await api.delete(`/chatbot/history/${studentId}`)
+  return resp.data
+}
+
 export default api
+

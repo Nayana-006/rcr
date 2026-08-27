@@ -1,6 +1,6 @@
-import { useMemo, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
-import { getCoursesByFaculty, getEnrollmentsByCourse, getAttendancePercentByStudentCourse, getAssignmentsByCourse, getCourseById, ensureArray } from '../../services/api'
+import { getCoursesByFaculty, getEnrollmentsByCourse, getAttendancePercentByStudentCourse, getAssignmentsByCourse, ensureArray } from '../../services/api'
 
 function computeCompletion({ studentId, courseId, assignments }) {
   const courseAssignments = assignments.filter((a) => a.courseId === courseId)

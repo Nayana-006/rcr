@@ -5,25 +5,45 @@ export default function AdminUsersStudents() {
   const [students, setStudents] = useState([])
   const [error, setError] = useState(null)
 
-  async function loadStudents() {
-    const users = ensureArray(await getUsersByRole('STUDENT'))
-    setStudents(
-      users
-        .slice()
-        .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
-        .map((u) => ({ id: u.id, name: u.name ?? 'Student', email: u.email, active: !!u.active })),
-    )
-  }
-
   useEffect(() => {
-    loadStudents().catch((e) => setError(e?.response?.data?.message ?? 'Failed to load students'))
+    let mounted = true
+    async function load() {
+      try {
+        const users = ensureArray(await getUsersByRole('STUDENT'))
+        if (!mounted) return
+        setStudents(
+          users
+            .slice()
+            .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+            .map((u) => ({ id: u.id, name: u.name ?? 'Student', email: u.email, active: !!u.active })),
+        )
+      } catch (e) {
+        if (mounted) setError(e?.response?.data?.message ?? 'Failed to load students')
+      }
+    }
+    load()
+    return () => { mounted = false }
   }, [])
+
+  async function reload() {
+    try {
+      const users = ensureArray(await getUsersByRole('STUDENT'))
+      setStudents(
+        users
+          .slice()
+          .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+          .map((u) => ({ id: u.id, name: u.name ?? 'Student', email: u.email, active: !!u.active })),
+      )
+    } catch (e) {
+      setError(e?.response?.data?.message ?? 'Failed to update student')
+    }
+  }
 
   async function toggleActive(student) {
     setError(null)
     try {
       await setUserActive(student.id, !student.active)
-      await loadStudents()
+      await reload()
     } catch (e) {
       setError(e?.response?.data?.message ?? 'Failed to update student')
     }

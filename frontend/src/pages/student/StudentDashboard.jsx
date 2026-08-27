@@ -8,6 +8,7 @@ import {
   getAssignmentsByCourse,
   getDoubtsByStudent,
   getCourseById,
+  getProgressByStudent,
   ensureArray,
 } from '../../services/api'
 
@@ -22,20 +23,6 @@ function StatCard({ title, value, sub }) {
   )
 }
 
-function computeCourseCompletion({ courseId, studentId, assignments }) {
-  const courseAssignments = assignments.filter((a) => a.courseId === courseId)
-  if (!courseAssignments.length) return 0
-
-  let gradedOrSubmitted = 0
-  for (const a of courseAssignments) {
-    const sub = (a.submissions || []).find((s) => s.studentId === studentId)
-    if (sub?.status === 'SUBMITTED' || sub?.status === 'GRADED') gradedOrSubmitted += 1
-  }
-
-  return Math.round((gradedOrSubmitted / courseAssignments.length) * 100)
-}
-
-
 export default function StudentDashboard() {
   const { user } = useAuth()
   const studentId = user?.userId ?? user?.id
@@ -47,8 +34,10 @@ export default function StudentDashboard() {
     async function load() {
       if (!studentId) return
 
-          let enrollments = await getEnrollmentsByStudent(studentId)
-          enrollments = ensureArray(enrollments)
+      let enrollments = await getEnrollmentsByStudent(studentId)
+      enrollments = ensureArray(enrollments)
+      const progressRecords = ensureArray(await getProgressByStudent(studentId))
+
       const enrolledCourses = []
       for (const e of enrollments) {
         const c = await getCourseById(e.courseId)
@@ -68,15 +57,25 @@ export default function StudentDashboard() {
         attendanceWeight += att.total || 1
 
         // compute completion by fetching assignments
-  let courseAssignments = await getAssignmentsByCourse(c.id)
-  courseAssignments = ensureArray(courseAssignments)
-        let gradedOrSubmitted = 0
+        let courseAssignments = await getAssignmentsByCourse(c.id)
+        courseAssignments = ensureArray(courseAssignments)
+
+        // Backend returns submission status as: SUBMITTED, GRADED, LATE
+        // If the assignment response doesn't include submissions, we treat missing submission as NOT submitted.
         for (const a of courseAssignments) {
-          const sub = (a.submissions || []).find((s) => s.studentId === studentId)
-          if (sub?.status === 'SUBMITTED' || sub?.status === 'GRADED') gradedOrSubmitted += 1
-          if (!sub || sub.status === 'NOT_SUBMITTED') pendingAssignments += 1
+          const submissions = ensureArray(a.submissions)
+          const sub = submissions.find((s) => String(s.studentId) === String(studentId))
+
+          const status = (sub?.status ?? '').toString().toUpperCase()
+          const isCompleted = status === 'SUBMITTED' || status === 'GRADED'
+
+          if (!isCompleted) pendingAssignments += 1
         }
-        const completion = courseAssignments.length ? Math.round((gradedOrSubmitted / courseAssignments.length) * 100) : 0
+
+
+        const progress = progressRecords.find((p) => String(p.courseId) === String(c.id))
+        const completion = progress?.progressPercent ?? 0
+
 
         courseProgress.push({ course: c.title, completion, attendance: att.percent })
       }

@@ -75,7 +75,7 @@ export default function StudentAssignments() {
     return () => {
       mounted = false
     }
-  }, [studentId, reloadKey])
+  }, [studentId, activeId, reloadKey])
 
   async function submit() {
     if (!model.active || !studentId || !answer.trim()) return

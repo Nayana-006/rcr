@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import {
   getCoursesByFaculty,
@@ -40,25 +40,37 @@ export default function FacultyAssignments() {
     load()
     return () => { mounted = false }
   }, [facultyId])
-  const [title, setTitle] = useState('')
-  const [description, setDescription] = useState('')
-  const [courseId, setCourseId] = useState('')
-  const [maxMarks, setMaxMarks] = useState('10')
-  const [dueDate, setDueDate] = useState('')
-
   const [grade, setGrade] = useState('')
   const [submissions, setSubmissions] = useState([])
   const [error, setError] = useState(null)
   const [editing, setEditing] = useState(false)
 
-  useEffect(() => {
-    if (active) {
-      setTitle(active.title ?? '')
-      setDescription(active.description ?? '')
-      setDueDate(active.dueDate ? active.dueDate.slice(0, 10) : '')
-      setCourseId(String(active.courseId ?? ''))
-    }
-  }, [active?.id])
+  // Form fields derived from active assignment when not editing
+  const [editedTitle, setEditedTitle] = useState('')
+  const [editedDescription, setEditedDescription] = useState('')
+  const [editedCourseId, setEditedCourseId] = useState('')
+  const [editedDueDate, setEditedDueDate] = useState('')
+  const [maxMarks, setMaxMarks] = useState('10')
+
+  // Sync form fields when active changes (using key trick: reset via separate tracked id)
+  const [syncedActiveId, setSyncedActiveId] = useState(null)
+  if (active?.id !== syncedActiveId) {
+    setSyncedActiveId(active?.id ?? null)
+    setEditedTitle(active?.title ?? '')
+    setEditedDescription(active?.description ?? '')
+    setEditedDueDate(active?.dueDate ? active.dueDate.slice(0, 10) : '')
+    setEditedCourseId(String(active?.courseId ?? ''))
+  }
+
+  // Convenience aliases so the rest of the code keeps working unchanged
+  const title = editedTitle
+  const setTitle = setEditedTitle
+  const description = editedDescription
+  const setDescription = setEditedDescription
+  const courseId = editedCourseId
+  const setCourseId = setEditedCourseId
+  const dueDate = editedDueDate
+  const setDueDate = setEditedDueDate
 
   async function reloadSubmissions(assignmentId) {
     if (!assignmentId) {
@@ -97,7 +109,32 @@ export default function FacultyAssignments() {
   }
 
   useEffect(() => {
-    reloadSubmissions(active?.id).catch(() => setSubmissions([]))
+    let mounted = true
+    async function loadSubs() {
+      if (!active?.id) {
+        if (mounted) setSubmissions([])
+        return
+      }
+      try {
+        const subs = ensureArray(await getSubmissionsByAssignment(active.id))
+        if (mounted) {
+          setSubmissions(
+            subs.map((s) => ({
+              id: s.id,
+              studentName: s.studentName ?? 'Student',
+              studentId: s.studentId,
+              status: s.status,
+              text: s.feedback ?? '',
+              grade: s.grade,
+            })),
+          )
+        }
+      } catch {
+        if (mounted) setSubmissions([])
+      }
+    }
+    loadSubs()
+    return () => { mounted = false }
   }, [active?.id])
 
   async function handleCreateAssignment() {

@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 
 import { login as apiLogin, register as apiRegister } from '../services/api'
 import { AuthContext } from './AuthContextBase'
+// eslint-disable-next-line react-refresh/only-export-components
+export { useAuth } from './useAuth'
 
 const LS_USER = 'rcs_user'
 
