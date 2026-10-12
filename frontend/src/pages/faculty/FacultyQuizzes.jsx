@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import {
   getCoursesByFaculty,
@@ -74,7 +75,7 @@ export default function FacultyQuizzes() {
             setActiveQuizId(allQuizzes[0].id)
           }
         }
-      } catch (_) {
+      } catch {
         toast.error('Failed to load courses or quizzes')
       } finally {
         if (mounted) setLoading(false)
@@ -102,7 +103,7 @@ export default function FacultyQuizzes() {
           setQuestions(qList)
           setAttempts(aList)
         }
-      } catch (_) {
+      } catch {
         // ignore
       }
     }
@@ -125,6 +126,7 @@ export default function FacultyQuizzes() {
 
   // Quiz CRUD handlers
   async function handleCreateQuiz() {
+    if (!courses.length || !quizForm.courseId) return toast.error('Create a course before creating a quiz')
     if (!quizForm.title.trim()) return toast.error('Quiz title is required')
     setError(null)
     try {
@@ -223,7 +225,7 @@ export default function FacultyQuizzes() {
       const qList = ensureArray(await getQuestionsByQuiz(activeQuiz?.id))
       setQuestions(qList)
       toast.success('Question deleted')
-    } catch (_) {
+    } catch {
       toast.error('Failed to delete question')
     }
   }
@@ -251,6 +253,11 @@ export default function FacultyQuizzes() {
         <h1 style={{ fontSize: 26, marginTop: 10 }}>Quiz Builder</h1>
         <p style={{ opacity: 0.8, marginTop: 6, fontSize: 13 }}>Create quizzes, add multiple choice questions, and view student attempts.</p>
         {error ? <div className="badge badgeDanger" style={{ marginTop: 12 }}>{error}</div> : null}
+        {!loading && !courses.length && (
+          <div className="badge" style={{ display: 'block', marginTop: 12 }}>
+            Quizzes need a course. <Link to="/faculty/courses" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Create one in Manage Courses</Link> first.
+          </div>
+        )}
       </div>
 
       <div className="grid" style={{ marginTop: 14, gridTemplateColumns: '0.95fr 1.05fr', gap: 14 }}>
@@ -297,6 +304,7 @@ export default function FacultyQuizzes() {
                 className="input"
                 value={quizForm.courseId}
                 onChange={(e) => setQuizForm((prev) => ({ ...prev, courseId: e.target.value }))}
+                disabled={!courses.length}
               >
                 {courses.map((c) => (
                   <option key={c.id} value={c.id}>{c.title}</option>
@@ -350,7 +358,7 @@ export default function FacultyQuizzes() {
                   <button type="button" className="btn" onClick={() => setIsEditingQuiz(false)}>Cancel</button>
                 </>
               ) : (
-                <button type="button" className="btn btnPrimary" onClick={handleCreateQuiz}>Create Quiz</button>
+                <button type="button" className="btn btnPrimary" onClick={handleCreateQuiz} disabled={!courses.length}>Create Quiz</button>
               )}
 
               {activeQuiz && !isEditingQuiz && (

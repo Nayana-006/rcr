@@ -1,42 +1,54 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { CircularProgress, LinearProgress } from '../../components/charts/ProgressBars'
-import { getEnrollmentsByStudent, getCourseById, getAttendancePercentByStudentCourse, getProgressByStudent, ensureArray } from '../../services/api'
+import { getEnrollmentsByStudent, getCourseById, getAttendancePercentByStudentCourse, getStudentCourseActivityProgress, ensureArray } from '../../services/api'
 
 export default function StudentProgress() {
   const { user } = useAuth()
   const studentId = user?.userId ?? user?.id
 
   const [model, setModel] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let mounted = true
     async function load() {
       if (!studentId) return
-      const enrollments = ensureArray(await getEnrollmentsByStudent(studentId))
-      const progressRecords = ensureArray(await getProgressByStudent(studentId))
-      const courseIds = (enrollments || []).map((e) => e.courseId)
-      const courses = []
-      for (const cid of courseIds) {
-        const c = await getCourseById(cid)
-        if (!c) continue
-        const progress = progressRecords.find((p) => String(p.courseId) === String(cid))
-        const completion = progress?.progressPercent ?? 0
-        const att = await getAttendancePercentByStudentCourse(studentId, cid)
-        const attendancePercent = att?.percent ?? 0
-        courses.push({ id: c.id, title: c.title, completion, attendance: attendancePercent, status: completion >= 100 ? 'Completed' : 'Ongoing' })
+      setLoading(true)
+      setError('')
+      try {
+        const enrollments = ensureArray(await getEnrollmentsByStudent(studentId))
+        const courses = await Promise.all(enrollments.map(async (enrollment) => {
+          const courseId = enrollment.courseId
+          const [course, activity, attendance] = await Promise.all([
+            getCourseById(courseId),
+            getStudentCourseActivityProgress(studentId, courseId).catch(() => ({ progressPercent: 0 })),
+            getAttendancePercentByStudentCourse(studentId, courseId).catch(() => ({ percent: 0 })),
+          ])
+          if (!course) return null
+          const completion = activity.progressPercent ?? 0
+          return { id: course.id, title: course.title, completion, attendance: attendance?.percent ?? 0, status: completion >= 100 ? 'Completed' : 'Ongoing' }
+        }))
+        const courseModels = courses.filter(Boolean)
+        const completedCount = courseModels.filter((course) => course.completion >= 100).length
+        const ongoingCount = courseModels.length - completedCount
+        const overall = courseModels.length ? Math.round(courseModels.reduce((acc, course) => acc + course.completion, 0) / courseModels.length) : 0
+        if (mounted) setModel({ courseModels, completedCount, ongoingCount, overall })
+      } catch (e) {
+        if (mounted) setError(e?.response?.data?.message ?? 'Could not load course progress. Please try again.')
+      } finally {
+        if (mounted) setLoading(false)
       }
-
-      const completedCount = courses.filter((c) => c.completion >= 100).length
-      const ongoingCount = courses.length - completedCount
-      const overall = courses.length ? Math.round(courses.reduce((acc, c) => acc + c.completion, 0) / courses.length) : 0
-      if (mounted) setModel({ courseModels: courses, completedCount, ongoingCount, overall })
     }
     load()
     return () => { mounted = false }
-  }, [studentId])
+  }, [studentId, reloadKey])
 
-  if (!model) return null
+  if (loading) return <div className="card" style={{ padding: 24 }}>Loading course progress…</div>
+  if (error) return <div className="card" role="alert" style={{ padding: 24 }}><p>{error}</p><button className="btn btnPrimary" onClick={() => setReloadKey((key) => key + 1)}>Retry</button></div>
+  if (!model) return <div className="card" role="alert" style={{ padding: 24 }}>Sign in again to load course progress.</div>
 
   return (
     <div>
@@ -54,7 +66,7 @@ export default function StudentProgress() {
             <div className="badge badgeAccent">Progress</div>
             <h1 style={{ fontSize: 26, marginTop: 10 }}>Course Completion Tracking</h1>
             <div style={{ opacity: 0.8, marginTop: 6, fontSize: 13 }}>
-              Computed from your submissions (completion) and attendance sessions (attendance %).
+              Completion counts assignments submitted and quizzes attempted. Attendance is based on sessions marked by faculty.
             </div>
           </div>
           <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
@@ -111,7 +123,7 @@ export default function StudentProgress() {
           <div className="card" style={{ marginTop: 14, padding: 14, background: 'rgba(255,255,255,.02)' }}>
             <div style={{ fontWeight: 900 }}>How completion is calculated</div>
             <div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.7, opacity: 0.8 }}>
-              Completion reaches 100% after you open a course learning link for the first time.
+              Completion increases as you submit assignments and attempt quizzes. Opening a course link updates your last accessed time only.
             </div>
           </div>
         </div>

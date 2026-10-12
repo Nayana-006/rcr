@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Users, BookOpen, CalendarDays, MessageCircle, Bell, User, Pencil, ClipboardCheck } from 'lucide-react'
+import { LayoutDashboard, Users, BookOpen, CalendarDays, MessageCircle, Bell, User, Pencil, ClipboardCheck, Video } from 'lucide-react'
 import { useAuth } from '../../context/useAuth'
 
 const baseItemStyle = {
@@ -25,6 +25,7 @@ export default function Sidebar({ onLogout }) {
     { to: '/student/attendance', label: 'Attendance', icon: CalendarDays },
     { to: '/student/progress', label: 'Course Progress', icon: BookOpen },
     { to: '/student/doubts', label: 'Doubts & Replies', icon: MessageCircle },
+    { to: '/student/meetings', label: 'Live Classes', icon: Video },
     { to: '/student/notifications', label: 'Notifications', icon: Bell },
   ]
 
@@ -36,6 +37,7 @@ export default function Sidebar({ onLogout }) {
     { to: '/faculty/quizzes', label: 'Manage Quizzes', icon: ClipboardCheck },
     { to: '/faculty/attendance', label: 'Attendance Management', icon: CalendarDays },
     { to: '/faculty/student-progress', label: 'Student Progress', icon: BookOpen },
+    { to: '/faculty/meetings', label: 'Live Classes', icon: Video },
     { to: '/faculty/doubts', label: 'Doubts Management', icon: MessageCircle },
   ]
 

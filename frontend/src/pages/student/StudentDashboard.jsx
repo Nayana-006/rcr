@@ -8,7 +8,8 @@ import {
   getAssignmentsByCourse,
   getDoubtsByStudent,
   getCourseById,
-  getProgressByStudent,
+  getSubmissionsByStudent,
+  getStudentCourseActivityProgress,
   ensureArray,
 } from '../../services/api'
 
@@ -28,68 +29,44 @@ export default function StudentDashboard() {
   const studentId = user?.userId ?? user?.id
 
   const [model, setModel] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let mounted = true
     async function load() {
       if (!studentId) return
-
-      let enrollments = await getEnrollmentsByStudent(studentId)
-      enrollments = ensureArray(enrollments)
-      const progressRecords = ensureArray(await getProgressByStudent(studentId))
-
-      const enrolledCourses = []
-      for (const e of enrollments) {
-        const c = await getCourseById(e.courseId)
-        if (c) enrolledCourses.push(c)
-      }
-
+      setLoading(true)
+      setError('')
+      try {
+      const enrollments = ensureArray(await getEnrollmentsByStudent(studentId))
+      const enrolledCourses = (await Promise.all(enrollments.map((enrollment) => getCourseById(enrollment.courseId).catch(() => null)))).filter(Boolean)
       const totalEnrolled = enrolledCourses.length
-
-      let attendanceSum = 0
-      let attendanceWeight = 0
-      const courseProgress = []
-      let pendingAssignments = 0
-
-      for (const c of enrolledCourses) {
-        const att = await getAttendancePercentByStudentCourse(studentId, c.id)
-        attendanceSum += (att.percent || 0) * (att.total || 1)
-        attendanceWeight += att.total || 1
-
-        // compute completion by fetching assignments
-        let courseAssignments = await getAssignmentsByCourse(c.id)
-        courseAssignments = ensureArray(courseAssignments)
-
-        // Backend returns submission status as: SUBMITTED, GRADED, LATE
-        // If the assignment response doesn't include submissions, we treat missing submission as NOT submitted.
-        for (const a of courseAssignments) {
-          const submissions = ensureArray(a.submissions)
-          const sub = submissions.find((s) => String(s.studentId) === String(studentId))
-
-          const status = (sub?.status ?? '').toString().toUpperCase()
-          const isCompleted = status === 'SUBMITTED' || status === 'GRADED'
-
-          if (!isCompleted) pendingAssignments += 1
-        }
-
-
-        const progress = progressRecords.find((p) => String(p.courseId) === String(c.id))
-        const completion = progress?.progressPercent ?? 0
-
-
-        courseProgress.push({ course: c.title, completion, attendance: att.percent })
-      }
-
+      const [submissions, attendanceAndProgress] = await Promise.all([
+        getSubmissionsByStudent(studentId).then(ensureArray).catch(() => []),
+        Promise.all(enrolledCourses.map(async (course) => {
+          const [attendance, activities, assignments] = await Promise.all([
+            getAttendancePercentByStudentCourse(studentId, course.id).catch(() => ({ percent: 0, total: 0 })),
+            getStudentCourseActivityProgress(studentId, course.id).catch(() => ({ progressPercent: 0 })),
+            getAssignmentsByCourse(course.id).then(ensureArray).catch(() => []),
+          ])
+          return { course, attendance, completion: activities.progressPercent ?? 0, assignments }
+        })),
+      ])
+      const attendanceRows = attendanceAndProgress
+      const attendanceSum = attendanceRows.reduce((sum, row) => sum + (row.attendance.percent || 0) * (row.attendance.total || 0), 0)
+      const attendanceWeight = attendanceRows.reduce((sum, row) => sum + (row.attendance.total || 0), 0)
+      const courseProgress = attendanceRows.map(({ course, attendance, completion }) => ({ course: course.title, completion, attendance: attendance.percent ?? 0 }))
+      const pendingAssignments = attendanceRows.reduce((count, row) => count + row.assignments.filter((assignment) => !submissions.some((submission) => String(submission.assignmentId) === String(assignment.id))).length, 0)
       const attendancePercent = attendanceWeight ? Math.round(attendanceSum / attendanceWeight) : 0
   const overallCompletion = totalEnrolled ? Math.round((ensureArray(courseProgress).reduce((acc, p) => acc + (p.completion || 0), 0)) / totalEnrolled) : 0
 
-  let notifications = await getNotificationsForUser(studentId)
-  notifications = ensureArray(notifications)
+  const notifications = await getNotificationsForUser(studentId).then(ensureArray).catch(() => [])
   const recentAnnouncementsRaw = notifications.filter((n) => n.meta?.kind === 'DOUBT_REPLIED' || n.meta?.kind === 'ASSIGNMENT_GRADED').slice(0,2)
-      const recentAnnouncements = await Promise.all(recentAnnouncementsRaw.map(async (n) => ({ course: (await getCourseById(n.meta?.courseId))?.title ?? '', text: n.body })))
+      const recentAnnouncements = await Promise.all(recentAnnouncementsRaw.map(async (n) => ({ course: (await getCourseById(n.meta?.courseId).catch(() => null))?.title ?? '', text: n.body })))
 
-      let doubts = await getDoubtsByStudent(studentId)
-      doubts = ensureArray(doubts)
+      const doubts = await getDoubtsByStudent(studentId).then(ensureArray).catch(() => [])
       const recentReplies = doubts
         .filter((d) => d.status === 'REPLIED')
         .slice(0, 2)
@@ -98,13 +75,20 @@ export default function StudentDashboard() {
       if (mounted) {
         setModel({ totalEnrolled, attendancePercent, overallCompletion, pendingAssignments, recentAnnouncements, recentReplies, courseProgress })
       }
+      } catch (e) {
+        if (mounted) setError(e?.response?.data?.message ?? 'Could not load your dashboard. Please try again.')
+      } finally {
+        if (mounted) setLoading(false)
+      }
     }
 
     load()
     return () => { mounted = false }
-  }, [studentId])
+  }, [studentId, reloadKey])
 
-  if (!model) return null
+  if (loading) return <div className="card" style={{ padding: 24 }}>Loading your dashboard…</div>
+  if (error) return <div className="card" role="alert" style={{ padding: 24 }}><p>{error}</p><button className="btn btnPrimary" onClick={() => setReloadKey((key) => key + 1)}>Retry</button></div>
+  if (!model) return <div className="card" role="alert" style={{ padding: 24 }}>Sign in again to load your dashboard.</div>
 
 
   return (

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { createDoubt, getEnrollmentsByStudent, getDoubtsByStudent, ensureArray } from '../../services/api'
 
@@ -29,6 +30,8 @@ export default function StudentDoubts() {
   const [courseId, setCourseId] = useState('')
   const [question, setQuestion] = useState('')
   const [error, setError] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
 
   async function loadThreads() {
     if (!studentId) return
@@ -40,6 +43,7 @@ export default function StudentDoubts() {
     let mounted = true
     async function load() {
       if (!studentId) return
+      setLoading(true)
       try {
         const enrollments = ensureArray(await getEnrollmentsByStudent(studentId))
         const courseList = enrollments.map((e) => ({
@@ -50,27 +54,32 @@ export default function StudentDoubts() {
         if (mounted) {
           setCoursesForStudent(courseList)
           setThreads(doubts)
-          if (courseList.length && !courseId) setCourseId(String(courseList[0].id))
+          setCourseId((current) => current || String(courseList[0]?.id ?? ''))
         }
       } catch (e) {
         if (mounted) setError(e?.response?.data?.message ?? 'Failed to load doubts')
+      } finally {
+        if (mounted) setLoading(false)
       }
     }
     load()
     return () => {
       mounted = false
     }
-  }, [studentId, courseId])
+  }, [studentId])
 
   async function submit() {
     if (!studentId || !courseId || !question.trim()) return alert('Please select a course and type your doubt.')
     setError(null)
+    setSubmitting(true)
     try {
       await createDoubt({ studentId, courseId: Number(courseId), question: question.trim() })
       setQuestion('')
       await loadThreads()
     } catch (e) {
       setError(e?.response?.data?.message ?? 'Failed to send doubt')
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -86,10 +95,17 @@ export default function StudentDoubts() {
             <div>
               <label className="label">Course</label>
               <select className="input" value={courseId} onChange={(e) => setCourseId(e.target.value)} disabled={!coursesForStudent.length}>
+                {!coursesForStudent.length && <option value="">{loading ? 'Loading courses…' : 'No enrolled courses'}</option>}
                 {coursesForStudent.map((c) => (
                   <option key={c.id} value={c.id}>{c.title}</option>
                 ))}
               </select>
+              {!coursesForStudent.length && (
+                <div className="badge" style={{ marginTop: 8, display: 'block' }}>
+                  Enroll in a course before sending a doubt.{' '}
+                  <Link to="/student/courses" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Browse courses</Link>
+                </div>
+              )}
             </div>
             <div>
               <label className="label">Your Question</label>
@@ -101,7 +117,7 @@ export default function StudentDoubts() {
                 placeholder="Type your doubt..."
               />
             </div>
-            <button type="button" className="btn btnPrimary" onClick={submit}>Send Doubt</button>
+            <button type="button" className="btn btnPrimary" onClick={submit} disabled={loading || submitting || !coursesForStudent.length || !question.trim()}>{submitting ? 'Sending…' : 'Send Doubt'}</button>
           </div>
         </div>
 

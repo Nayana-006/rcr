@@ -27,6 +27,7 @@ export default function StudentAssignments() {
   const [answer, setAnswer] = useState('')
   const [model, setModel] = useState({ items: [], active: null })
   const [error, setError] = useState(null)
+  const [success, setSuccess] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
 
@@ -54,9 +55,14 @@ export default function StudentAssignments() {
               title: a.title,
               description: a.description ?? '',
               due: a.dueDate ? new Date(a.dueDate).toLocaleDateString() : '—',
+              dueDateTime: a.dueDate ? new Date(a.dueDate).toLocaleString() : 'No deadline',
+              maxMarks: a.maxMarks ?? 100,
+              allowLateSubmission: Boolean(a.allowLateSubmission),
               status,
               grade: sub?.grade ?? null,
-              submissionText: sub?.feedback ?? '',
+              answerText: sub?.answerText ?? '',
+              feedback: sub?.feedback ?? '',
+              late: Boolean(sub?.late),
             })
           }
         }
@@ -65,7 +71,7 @@ export default function StudentAssignments() {
         const active = allItems.find((x) => String(x.id) === String(activeId)) ?? allItems[0] ?? null
         if (mounted) {
           setModel({ items: allItems, active })
-          if (active?.submissionText) setAnswer(active.submissionText)
+          if (active) setAnswer(active.answerText)
         }
       } catch (e) {
         if (mounted) setError(e?.response?.data?.message ?? 'Failed to load assignments')
@@ -81,8 +87,10 @@ export default function StudentAssignments() {
     if (!model.active || !studentId || !answer.trim()) return
     setSubmitting(true)
     setError(null)
+    setSuccess(null)
     try {
-      await submitAssignment({ assignmentId: model.active.id, studentId, text: answer.trim() })
+      await submitAssignment({ assignmentId: model.active.id, answerText: answer.trim() })
+      setSuccess('Your answer was submitted successfully.')
       setReloadKey((k) => k + 1)
     } catch (e) {
       setError(e?.response?.data?.message ?? 'Submission failed')
@@ -97,7 +105,8 @@ export default function StudentAssignments() {
         <div className="badge badgeAccent">Assignments</div>
         <h1 style={{ fontSize: 26, marginTop: 10 }}>Submit Assignments</h1>
         <div style={{ opacity: 0.8, marginTop: 6, fontSize: 13 }}>Text-only submissions saved to the backend.</div>
-        {error ? <div className="badge badgeDanger" style={{ marginTop: 12 }}>{error}</div> : null}
+        {error ? <div role="alert" className="badge badgeDanger" style={{ marginTop: 12 }}>{error}</div> : null}
+        {success ? <div role="status" className="badge badgeSuccess" style={{ marginTop: 12 }}>{success}</div> : null}
       </div>
 
       <div className="grid" style={{ marginTop: 14, gridTemplateColumns: '0.95fr 1.05fr', gap: 14 }}>
@@ -118,7 +127,7 @@ export default function StudentAssignments() {
                 }}
                 onClick={() => {
                   setActiveId(a.id)
-                  setAnswer(a.submissionText ?? '')
+                  setAnswer(a.answerText ?? '')
                 }}
               >
                 <div style={{ fontWeight: 900 }}>{a.title}</div>
@@ -135,7 +144,9 @@ export default function StudentAssignments() {
         <div className="card" style={{ padding: 16 }}>
           <div style={{ fontWeight: 950, fontSize: 18 }}>{model.active?.title ?? 'Select an assignment'}</div>
           <div style={{ opacity: 0.8, fontSize: 13, marginTop: 6 }}>Course: {model.active?.courseTitle ?? '—'}</div>
-          <div style={{ opacity: 0.8, fontSize: 13, marginTop: 4 }}>Due: {model.active?.due ?? '—'}</div>
+          <div style={{ opacity: 0.8, fontSize: 13, marginTop: 4 }}>Due: {model.active?.dueDateTime ?? '—'}</div>
+          <div style={{ opacity: 0.8, fontSize: 13, marginTop: 4 }}>Maximum marks: {model.active?.maxMarks ?? '—'}</div>
+          {model.active?.allowLateSubmission ? <div style={{ opacity: 0.8, fontSize: 13, marginTop: 4 }}>Late submissions are accepted.</div> : null}
           {model.active?.description ? (
             <div style={{ opacity: 0.85, fontSize: 13, marginTop: 8, lineHeight: 1.6 }}>{model.active.description}</div>
           ) : null}
@@ -149,24 +160,30 @@ export default function StudentAssignments() {
             placeholder="Type your solution here..."
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
-            disabled={!model.active || model.active?.status === 'GRADED'}
+            disabled={!model.active}
           />
 
           <div style={{ display: 'flex', gap: 12, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
             <button
               type="button"
               className="btn btnPrimary"
-              disabled={!answer.trim().length || !model.active || model.active?.status === 'GRADED' || submitting}
+              disabled={!answer.trim().length || !model.active || submitting}
               onClick={submit}
             >
-              {submitting ? 'Submitting...' : model.active?.status === 'SUBMITTED' ? 'Resubmit' : 'Submit'}
+              {submitting ? 'Submitting...' : ['SUBMITTED', 'LATE', 'GRADED'].includes(model.active?.status) ? 'Resubmit' : 'Submit'}
             </button>
             <div className="badge" style={{ opacity: 0.8 }}>
               {model.active?.status === 'GRADED'
                 ? `Grade: ${model.active.grade ?? '—'}`
-                : `Status: ${model.active?.status ?? '—'}`}
+                : `Status: ${model.active?.status ?? '—'}${model.active?.late ? ' · Late' : ''}`}
             </div>
           </div>
+          {model.active?.status === 'GRADED' ? (
+            <div className="card" style={{ marginTop: 12, padding: 12 }}>
+              <div style={{ fontWeight: 850 }}>Faculty feedback</div>
+              <div style={{ marginTop: 6, whiteSpace: 'pre-wrap', fontSize: 13 }}>{model.active.feedback || 'No feedback provided.'}</div>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

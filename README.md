@@ -9,12 +9,15 @@ A full-stack web application for remote learning, built with Spring Boot (Java 2
 - Track course progress and attendance
 - Submit assignments and view grades
 - Ask doubts and receive replies from faculty
+- Join live WebRTC video classes for enrolled courses
+- Ask questions to an AI-powered educational assistant
 - View notifications
 
 ### For Faculty
 - Create and manage courses
 - Add learning links (YouTube, Google Drive, PDF, etc.)
 - Create and grade assignments
+- Schedule and manage live WebRTC video classes
 - Mark attendance for enrolled students
 - View student progress and completion rates
 - Reply to student doubts
@@ -67,6 +70,15 @@ Update the database credentials in `demo/src/main/resources/application.properti
 ```properties
 spring.datasource.username=your_username
 spring.datasource.password=your_password
+```
+
+#### Environment Variables (Backend)
+
+For the AI Assistant to work properly, export the following environment variable in your terminal before running Spring Boot:
+
+```bash
+export OPENAI_API_KEY="sk-your-openai-api-key"
+export OPENAI_MODEL="gpt-3.5-turbo" # Optional, defaults to gpt-3.5-turbo
 ```
 
 ### 3. Backend Setup
@@ -152,6 +164,17 @@ After starting the application, you can register new users or use these test acc
 - `GET /api/notifications/user/{userId}` - Get user notifications
 - `PUT /api/notifications/{id}/read` - Mark notification as read
 - `POST /api/notifications` - Create notification
+
+### Live Meetings (WebRTC)
+- `POST /api/meetings` - Create a meeting (Faculty)
+- `GET /api/meetings/course/{courseId}` - Get meetings by course
+- `GET /api/meetings/{id}` - Get meeting details
+- `PATCH /api/meetings/{id}/status` - Update meeting status (Faculty)
+
+### AI Assistant
+- `POST /api/chatbot/message` - Send message to AI Chatbot
+- `GET /api/chatbot/history/{studentId}` - Get chat history
+- `DELETE /api/chatbot/history/{studentId}` - Clear chat history
 
 ### Dashboard
 - `GET /api/dashboard/student/{studentId}` - Student dashboard

@@ -2,6 +2,7 @@ package com.example.demo.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
@@ -20,6 +21,12 @@ public class AssignmentRequest {
     private String description;
 
     private Instant dueDate;
+
+    @NotNull
+    @DecimalMin(value = "0.01")
+    private Double maxMarks;
+
+    private Boolean allowLateSubmission;
 
     @NotNull
     private Long courseId;

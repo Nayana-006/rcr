@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import {
   getCoursesByFaculty,
@@ -7,13 +8,20 @@ import {
   createAssignment,
   updateAssignment,
   deleteAssignment,
-  getSubmissionsByAssignment,
+  getAssignmentTracking,
   ensureArray,
 } from '../../services/api'
 
 function SubmissionBadge({ status }) {
-  const cls = status === 'GRADED' ? 'badge badgeSuccess' : status === 'SUBMITTED' ? 'badge badgeAccent' : 'badge badgeDanger'
+  const cls = status === 'GRADED' ? 'badge badgeSuccess' : status === 'SUBMITTED' || status === 'LATE' ? 'badge badgeAccent' : 'badge badgeDanger'
   return <span className={cls}>{status}</span>
+}
+
+function toDateTimeLocal(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  date.setMinutes(date.getMinutes() - date.getTimezoneOffset())
+  return date.toISOString().slice(0, 16)
 }
 
 export default function FacultyAssignments() {
@@ -41,6 +49,7 @@ export default function FacultyAssignments() {
     return () => { mounted = false }
   }, [facultyId])
   const [grade, setGrade] = useState('')
+  const [feedback, setFeedback] = useState('')
   const [submissions, setSubmissions] = useState([])
   const [error, setError] = useState(null)
   const [editing, setEditing] = useState(false)
@@ -50,7 +59,8 @@ export default function FacultyAssignments() {
   const [editedDescription, setEditedDescription] = useState('')
   const [editedCourseId, setEditedCourseId] = useState('')
   const [editedDueDate, setEditedDueDate] = useState('')
-  const [maxMarks, setMaxMarks] = useState('10')
+  const [maxMarks, setMaxMarks] = useState('100')
+  const [allowLateSubmission, setAllowLateSubmission] = useState(false)
 
   // Sync form fields when active changes (using key trick: reset via separate tracked id)
   const [syncedActiveId, setSyncedActiveId] = useState(null)
@@ -58,8 +68,10 @@ export default function FacultyAssignments() {
     setSyncedActiveId(active?.id ?? null)
     setEditedTitle(active?.title ?? '')
     setEditedDescription(active?.description ?? '')
-    setEditedDueDate(active?.dueDate ? active.dueDate.slice(0, 10) : '')
+    setEditedDueDate(toDateTimeLocal(active?.dueDate))
     setEditedCourseId(String(active?.courseId ?? ''))
+    setMaxMarks(String(active?.maxMarks ?? 100))
+    setAllowLateSubmission(Boolean(active?.allowLateSubmission))
   }
 
   // Convenience aliases so the rest of the code keeps working unchanged
@@ -77,15 +89,18 @@ export default function FacultyAssignments() {
       setSubmissions([])
       return
     }
-    const subs = ensureArray(await getSubmissionsByAssignment(assignmentId))
+    const subs = ensureArray(await getAssignmentTracking(assignmentId))
     setSubmissions(
       subs.map((s) => ({
         id: s.id,
         studentName: s.studentName ?? 'Student',
         studentId: s.studentId,
         status: s.status,
-        text: s.feedback ?? '',
+        answerText: s.answerText ?? '',
+        feedback: s.feedback ?? '',
         grade: s.grade,
+        submittedAt: s.submittedAt,
+        late: s.late,
       })),
     )
   }
@@ -116,7 +131,7 @@ export default function FacultyAssignments() {
         return
       }
       try {
-        const subs = ensureArray(await getSubmissionsByAssignment(active.id))
+        const subs = ensureArray(await getAssignmentTracking(active.id))
         if (mounted) {
           setSubmissions(
             subs.map((s) => ({
@@ -124,8 +139,11 @@ export default function FacultyAssignments() {
               studentName: s.studentName ?? 'Student',
               studentId: s.studentId,
               status: s.status,
-              text: s.feedback ?? '',
+              answerText: s.answerText ?? '',
+              feedback: s.feedback ?? '',
               grade: s.grade,
+              submittedAt: s.submittedAt,
+              late: s.late,
             })),
           )
         }
@@ -151,6 +169,8 @@ export default function FacultyAssignments() {
         title: t,
         description: description.trim(),
         dueDate: dueDate ? new Date(dueDate).toISOString() : null,
+        maxMarks: Number(maxMarks),
+        allowLateSubmission,
       }
 
       await createAssignment(payload)
@@ -159,7 +179,8 @@ export default function FacultyAssignments() {
       setTitle('')
       setDescription('')
       setDueDate('')
-      setMaxMarks('10')
+      setMaxMarks('100')
+      setAllowLateSubmission(false)
       setEditing(false)
     } catch (e) {
       setError(e?.response?.data?.message ?? 'Failed to create assignment')
@@ -177,6 +198,8 @@ export default function FacultyAssignments() {
         title: t,
         description: description.trim(),
         dueDate: dueDate ? new Date(dueDate).toISOString() : null,
+        maxMarks: Number(maxMarks),
+        allowLateSubmission,
       })
       await reloadAssignments()
       setEditing(false)
@@ -189,16 +212,19 @@ export default function FacultyAssignments() {
   async function handleGradeSubmission(submission) {
     if (!submission) return
     const marks = Number(grade)
-    if (!Number.isFinite(marks)) return alert('Enter grade number (0-10).')
+    if (!Number.isFinite(marks) || marks < 0 || marks > Number(active?.maxMarks ?? maxMarks)) {
+      return alert(`Enter a grade between 0 and ${active?.maxMarks ?? maxMarks}.`)
+    }
 
     setError(null)
     try {
       await gradeSubmission({
         submissionId: submission.id,
         marks,
-        feedback: submission.text ?? '',
+        feedback,
       })
       setGrade('')
+      setFeedback('')
       await reloadSubmissions(active.id)
     } catch (e) {
       setError(e?.response?.data?.message ?? 'Failed to grade submission')
@@ -229,6 +255,11 @@ export default function FacultyAssignments() {
         <h1 style={{ fontSize: 26, marginTop: 10 }}>Create & Grade Assignments</h1>
         <p style={{ opacity: 0.8, marginTop: 6, lineHeight: 1.7 }}>Manage assignments and grade student submissions via the backend API.</p>
         {error ? <div className="badge badgeDanger" style={{ marginTop: 12 }}>{error}</div> : null}
+        {!model.courses.length && (
+          <div className="badge" style={{ display: 'block', marginTop: 12 }}>
+            Assignments need a course. <Link to="/faculty/courses" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Create one in Manage Courses</Link> first.
+          </div>
+        )}
       </div>
 
       <div className="grid" style={{ marginTop: 14, gridTemplateColumns: '0.95fr 1.05fr', gap: 14 }}>
@@ -264,7 +295,7 @@ export default function FacultyAssignments() {
           <div style={{ marginTop: 10, display: 'grid', gap: 10 }}>
             <div>
               <label className="label">Course</label>
-              <select className="input" value={courseId || ensureActiveCourse()} onChange={(e) => setCourseId(e.target.value)}>
+              <select className="input" value={courseId || ensureActiveCourse()} onChange={(e) => setCourseId(e.target.value)} disabled={!model.courses.length}>
                 {model.courses.map((c) => (
                   <option key={c.id} value={c.id}>{c.title}</option>
                 ))}
@@ -282,13 +313,17 @@ export default function FacultyAssignments() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div>
                 <label className="label">Due date</label>
-                <input className="input" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+              <input className="input" type="datetime-local" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
               </div>
               <div>
                 <label className="label">Max marks</label>
-                <input className="input" type="number" min={1} value={maxMarks} onChange={(e) => setMaxMarks(e.target.value)} />
+                <input className="input" type="number" min={0.01} step="any" value={maxMarks} onChange={(e) => setMaxMarks(e.target.value)} />
               </div>
             </div>
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>
+              <input type="checkbox" checked={allowLateSubmission} onChange={(e) => setAllowLateSubmission(e.target.checked)} />
+              Accept late submissions
+            </label>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               {editing ? (
                 <>
@@ -296,7 +331,7 @@ export default function FacultyAssignments() {
                   <button type="button" className="btn" onClick={() => setEditing(false)}>Cancel</button>
                 </>
               ) : (
-                <button type="button" className="btn btnPrimary" onClick={handleCreateAssignment}>Create</button>
+                <button type="button" className="btn btnPrimary" onClick={handleCreateAssignment} disabled={!model.courses.length}>Create</button>
               )}
               {active && (
                 <>
@@ -322,28 +357,32 @@ export default function FacultyAssignments() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                       <div>
                         <div style={{ fontWeight: 950 }}>{s.studentName}</div>
-                        <div style={{ fontSize: 12, opacity: 0.75, marginTop: 3 }}>Submission (text-only)</div>
+                        <div style={{ fontSize: 12, opacity: 0.75, marginTop: 3 }}>{s.submitted ? `Submitted ${s.submittedAt ? new Date(s.submittedAt).toLocaleString() : ''}${s.late ? ' · Late' : ''}` : 'Not submitted'}</div>
                       </div>
                       <SubmissionBadge status={s.status} />
                     </div>
 
-                    <div style={{ marginTop: 10, fontSize: 13, opacity: 0.85, lineHeight: 1.6 }}>{s.text}</div>
+                    {s.submitted ? <div style={{ marginTop: 10, fontSize: 13, opacity: 0.85, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{s.answerText || 'No answer text available for this historical submission.'}</div> : null}
 
-                    {s.status !== 'GRADED' ? (
+                    {s.submitted ? (
                       <div style={{ marginTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
                         <input
                           className="input"
-                          placeholder={`Grade (0-${active.maxMarks})`}
+                          type="number"
+                          min="0"
+                          max={active.maxMarks ?? 100}
+                          step="any"
+                          placeholder={`Grade (0-${active.maxMarks ?? 100})`}
                           value={grade}
                           onChange={(e) => setGrade(e.target.value)}
                           style={{ width: 170 }}
                         />
-                        <button className="btn btnPrimary" onClick={() => handleGradeSubmission(s)}>Grade</button>
+                        <input className="input" placeholder="Feedback (optional)" value={feedback} onChange={(e) => setFeedback(e.target.value)} />
+                        <button className="btn btnPrimary" onClick={() => handleGradeSubmission(s)}>Save grade</button>
+                        {s.grade != null ? <div style={{ width: '100%', fontSize: 13, opacity: 0.82 }}>Current grade: {s.grade}/{active.maxMarks ?? 100}{s.feedback ? ` · ${s.feedback}` : ''}</div> : null}
                       </div>
                     ) : (
-                      <div style={{ marginTop: 10, fontSize: 13, opacity: 0.82 }}>
-                        Current grade: {s.grade ?? 0}/{active.maxMarks}
-                      </div>
+                      <div style={{ marginTop: 10, fontSize: 13, opacity: 0.82 }}>Waiting for student submission.</div>
                     )}
                   </div>
                 ))

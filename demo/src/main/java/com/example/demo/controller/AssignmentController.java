@@ -2,7 +2,6 @@ package com.example.demo.controller;
 
 import com.example.demo.dto.AssignmentRequest;
 import com.example.demo.dto.AssignmentResponse;
-import com.example.demo.entity.Role;
 import com.example.demo.entity.User;
 import com.example.demo.exception.ResourceNotFoundException;
 import com.example.demo.repository.UserRepository;
@@ -21,50 +20,47 @@ import java.util.List;
 @RequestMapping("/api/assignments")
 @RequiredArgsConstructor
 public class AssignmentController {
-
     private final AssignmentService assignmentService;
     private final UserRepository userRepository;
 
     @GetMapping
-    public ResponseEntity<List<AssignmentResponse>> getAll() {
-        return ResponseEntity.ok(assignmentService.getAllAssignments());
+    public ResponseEntity<List<AssignmentResponse>> getAll(Authentication authentication) {
+        return ResponseEntity.ok(assignmentService.getAllAssignments(currentUser(authentication)));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<AssignmentResponse> getById(@PathVariable Long id) {
-        return ResponseEntity.ok(assignmentService.getAssignmentById(id));
+    public ResponseEntity<AssignmentResponse> getById(@PathVariable Long id, Authentication authentication) {
+        return ResponseEntity.ok(assignmentService.getAssignmentById(id, currentUser(authentication)));
     }
 
     @GetMapping("/course/{courseId}")
-    public ResponseEntity<List<AssignmentResponse>> getByCourse(@PathVariable Long courseId) {
-        return ResponseEntity.ok(assignmentService.getAssignmentsByCourse(courseId));
+    public ResponseEntity<List<AssignmentResponse>> getByCourse(@PathVariable Long courseId, Authentication authentication) {
+        return ResponseEntity.ok(assignmentService.getAssignmentsByCourse(courseId, currentUser(authentication)));
     }
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN','FACULTY')")
     public ResponseEntity<AssignmentResponse> create(@Valid @RequestBody AssignmentRequest req, Authentication authentication) {
-        User current = userRepository.findByEmail(authentication.getName())
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-
-        return ResponseEntity.status(HttpStatus.CREATED).body(assignmentService.createAssignment(req, current.getId()));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(assignmentService.createAssignment(req, currentUser(authentication)));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN','FACULTY')")
-    public ResponseEntity<AssignmentResponse> update(@PathVariable Long id, @Valid @RequestBody AssignmentRequest req, Authentication authentication) {
-        User current = userRepository.findByEmail(authentication.getName())
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-        boolean isAdmin = current.getRole() == Role.ADMIN;
-        return ResponseEntity.ok(assignmentService.updateAssignment(id, req, current.getId(), isAdmin));
+    public ResponseEntity<AssignmentResponse> update(@PathVariable Long id, @Valid @RequestBody AssignmentRequest req,
+                                                     Authentication authentication) {
+        return ResponseEntity.ok(assignmentService.updateAssignment(id, req, currentUser(authentication)));
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN','FACULTY')")
     public ResponseEntity<Void> delete(@PathVariable Long id, Authentication authentication) {
-        User current = userRepository.findByEmail(authentication.getName())
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-        boolean isAdmin = current.getRole() == Role.ADMIN;
-        assignmentService.deleteAssignment(id, current.getId(), isAdmin);
+        assignmentService.deleteAssignment(id, currentUser(authentication));
         return ResponseEntity.noContent().build();
+    }
+
+    private User currentUser(Authentication authentication) {
+        return userRepository.findByEmail(authentication.getName())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
     }
 }

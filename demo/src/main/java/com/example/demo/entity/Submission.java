@@ -20,14 +20,23 @@ public class Submission {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, updatable = false)
+    @Column(nullable = false)
     private Instant submittedAt;
+
+    @Column(columnDefinition = "TEXT")
+    private String answerText;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private SubmissionStatus status;
 
     private Double grade;
+
+    private Instant gradedAt;
+
+    @Builder.Default
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private Boolean late = false;
 
     @Column(length = 2000)
     private String feedback;
@@ -48,5 +57,6 @@ public class Submission {
         if (status == null) {
             status = SubmissionStatus.SUBMITTED;
         }
+        if (late == null) late = false;
     }
 }

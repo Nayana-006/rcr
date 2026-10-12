@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { MessageCircle, X, Send, Trash2, Loader2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { sendMessageToChatbot, getChatbotHistory, clearChatbotHistory, ensureArray } from '../services/api'
@@ -18,7 +18,8 @@ export default function ChatbotWidget() {
   const messagesEndRef = useRef(null)
 
   // Load history when widget is opened
-  const loadHistory = async () => {
+  const loadHistory = useCallback(async () => {
+    if (!studentId) return
     setLoadingHistory(true)
     try {
       const history = ensureArray(await getChatbotHistory(studentId))
@@ -29,16 +30,18 @@ export default function ChatbotWidget() {
           sender: m.sender, // "USER" or "BOT"
         })),
       )
-    } catch (_) {
+    } catch {
       toast.error('Failed to load chat history')
     } finally {
       setLoadingHistory(false)
     }
-  }
+  }, [studentId])
 
   useEffect(() => {
     if (isOpen && studentId) {
-      loadHistory()
+      // Loading saved messages is the synchronization this effect handles.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      void loadHistory()
     }
   }, [isOpen, studentId, loadHistory])
 
@@ -69,7 +72,7 @@ export default function ChatbotWidget() {
     try {
       const res = await sendMessageToChatbot({ message: userText, studentId })
       setMessages((prev) => [...prev, { id: Date.now() + 1, text: res.reply, sender: 'BOT' }])
-    } catch (_) {
+    } catch {
       toast.error('Chatbot failed to respond')
       // Remove user's temporary message on error to stay in sync
       setMessages((prev) => prev.filter((m) => m.id !== newUserMsg.id))
@@ -84,7 +87,7 @@ export default function ChatbotWidget() {
       await clearChatbotHistory(studentId)
       setMessages([])
       toast.success('Chat history cleared')
-    } catch (_) {
+    } catch {
       toast.error('Failed to clear history')
     }
   }
@@ -155,7 +158,7 @@ export default function ChatbotWidget() {
         <div
           className="card"
           style={{
-            width: 360,
+            width: 'min(360px, calc(100vw - 48px))',
             height: 500,
             display: 'flex',
             flexDirection: 'column',

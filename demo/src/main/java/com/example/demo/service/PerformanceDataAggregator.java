@@ -34,9 +34,7 @@ public class PerformanceDataAggregator {
         // Assignment submissions
         List<Submission> submissions = submissionRepository.findByStudentId(studentId);
         int totalAssignments = submissions.size();
-        long submittedCount = submissions.stream()
-                .filter(s -> s.getStatus() != null && s.getStatus().name().equalsIgnoreCase("SUBMITTED"))
-                .count();
+        long submittedCount = submissions.size();
         double assignmentSubmissionRate = totalAssignments == 0 ? 0.0 : (double) submittedCount / totalAssignments;
 
         // Login frequency (logins per week)

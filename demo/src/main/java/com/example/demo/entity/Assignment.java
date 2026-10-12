@@ -31,8 +31,19 @@ public class Assignment {
 
     private Instant dueDate;
 
+    // Database defaults give existing assignments safe values when Hibernate adds these columns.
+    @Builder.Default
+    @Column(nullable = false, columnDefinition = "double default 100")
+    private Double maxMarks = 100.0;
+
+    @Builder.Default
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private Boolean allowLateSubmission = false;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
+
+    private Instant updatedAt;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "course_id", nullable = false)
@@ -43,5 +54,13 @@ public class Assignment {
         if (createdAt == null) {
             createdAt = Instant.now();
         }
+        if (maxMarks == null) maxMarks = 100.0;
+        if (allowLateSubmission == null) allowLateSubmission = false;
+        updatedAt = createdAt;
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        updatedAt = Instant.now();
     }
 }

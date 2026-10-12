@@ -10,8 +10,11 @@ import java.time.Instant;
 public class SubmissionResponse {
     private Long id;
     private Instant submittedAt;
+    private String answerText;
     private String status;
     private Double grade;
+    private Instant gradedAt;
+    private Boolean late;
     private String feedback;
     private Long assignmentId;
     private String assignmentTitle;

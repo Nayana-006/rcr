@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import {
   getCoursesByFaculty,
@@ -136,12 +137,18 @@ export default function FacultyAttendance() {
           <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
             <div>
               <label className="label">Course</label>
-              <select className="input" value={courseId} onChange={(e) => setCourseId(e.target.value)}>
+              <select className="input" value={courseId} onChange={(e) => setCourseId(e.target.value)} disabled={!model.courses.length}>
                 {model.courses.map((c) => (
                   <option key={c.id} value={c.id}>{c.title}</option>
                 ))}
                 {!model.courses.length && <option value="">No courses</option>}
               </select>
+              {!model.courses.length && (
+                <div className="badge" style={{ marginTop: 8, display: 'block' }}>
+                  Create a course before marking attendance.{' '}
+                  <Link to="/faculty/courses" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Go to Manage Courses</Link>
+                </div>
+              )}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div>

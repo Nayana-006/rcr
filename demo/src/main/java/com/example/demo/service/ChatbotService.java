@@ -5,16 +5,22 @@ import com.example.demo.dto.ChatResponse;
 import com.example.demo.entity.*;
 import com.example.demo.exception.ResourceNotFoundException;
 import com.example.demo.repository.ChatMessageRepository;
-import com.example.demo.repository.CourseRepository;
-import com.example.demo.repository.EnrollmentRepository;
 import com.example.demo.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.Locale;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -22,8 +28,12 @@ public class ChatbotService {
 
     private final ChatMessageRepository chatMessageRepository;
     private final UserRepository userRepository;
-    private final CourseRepository courseRepository;
-    private final EnrollmentRepository enrollmentRepository;
+
+    @Value("${openai.api.key:}")
+    private String openAiApiKey;
+
+    @Value("${openai.model:gpt-3.5-turbo}")
+    private String openAiModel;
 
     @Transactional
     public ChatResponse processMessage(ChatRequest req) {
@@ -38,8 +48,8 @@ public class ChatbotService {
                 .build();
         chatMessageRepository.save(userMsg);
 
-        // 2. Generate chatbot reply
-        String reply = generateReply(req.getMessage().toLowerCase().trim(), student);
+        // 2. Generate chatbot reply via OpenAI
+        String reply = generateReplyFromLLM(req.getMessage(), student);
 
         // 3. Save bot's reply message
         ChatMessage botMsg = ChatMessage.builder()
@@ -72,54 +82,84 @@ public class ChatbotService {
         chatMessageRepository.deleteByStudentId(studentId);
     }
 
-    // Smart Rule-based Keyword Matching (LLM-ready wrapper)
-    private String generateReply(String msg, User student) {
-        if (msg.contains("hello") || msg.contains("hi ") || msg.equals("hi") || msg.contains("hey")) {
-            return "Hello " + student.getName() + "! Welcome to your Remote Classroom Assistant. How can I help you today?";
+    private String generateReplyFromLLM(String msg, User student) {
+        if (openAiApiKey == null || openAiApiKey.trim().isEmpty()) {
+            return generateLocalReply(msg);
         }
 
-        if (msg.contains("offline") || msg.contains("internet") || msg.contains("network") || msg.contains("connectivity")) {
-            return "RCR Platform has a robust **Rural Offline Mode**. You can download notes, assignments, and quizzes while connected. Once offline, you can continue learning. All quiz attempts and study progress are stored on your device and will sync automatically when your internet connection is restored!";
-        }
+        RestTemplate restTemplate = new RestTemplate();
+        String url = "https://api.openai.com/v1/chat/completions";
 
-        if (msg.contains("sync") || msg.contains("synchronize") || msg.contains("connection")) {
-            return "Our synchronization system monitors your network. In offline mode, a status banner will show 'Offline'. When your network returns, click 'Sync Now' in the offline status bar, or let the platform auto-sync your completed quizzes and progress logs.";
-        }
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(openAiApiKey);
 
-        if (msg.contains("course") || msg.contains("class") || msg.contains("learn")) {
-            List<Enrollment> enrolls = enrollmentRepository.findByStudentId(student.getId());
-            if (enrolls.isEmpty()) {
-                return "You are not enrolled in any courses yet. Go to the 'Available Courses' page to browse and enroll!";
+        String systemPrompt = "You are an AI educational assistant for a remote learning platform. " +
+                "Your goal is to help student '" + student.getName() + "' understand academic concepts clearly. " +
+                "Explain difficult concepts in clear, student-friendly language. " +
+                "Do not invent facts if you do not know the answer.";
+
+        Map<String, Object> requestBody = new HashMap<>();
+        requestBody.put("model", openAiModel);
+        requestBody.put("messages", List.of(
+                Map.of("role", "system", "content", systemPrompt),
+                Map.of("role", "user", "content", msg)
+        ));
+        requestBody.put("max_tokens", 500);
+
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+
+        try {
+            @SuppressWarnings("rawtypes")
+            ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = response.getBody();
+            if (body != null && body.containsKey("choices")) {
+                List<Map<String, Object>> choices = (List<Map<String, Object>>) body.get("choices");
+                if (!choices.isEmpty()) {
+                    Map<String, Object> message = (Map<String, Object>) choices.get(0).get("message");
+                    return (String) message.get("content");
+                }
             }
-            String coursesList = enrolls.stream()
-                    .map(e -> "- " + e.getCourse().getTitle())
-                    .collect(Collectors.joining("\n"));
-            return "You are currently enrolled in:\n" + coursesList + "\n\nYou can access course materials, download notes, and watch recorded lectures on your 'My Courses' tab.";
+            return "Error: Could not parse response from AI provider.";
+        } catch (Exception e) {
+            e.printStackTrace();
+            return generateLocalReply(msg);
+        }
+    }
+
+    private String generateLocalReply(String message) {
+        String question = message == null ? "" : message.toLowerCase(Locale.ROOT);
+
+        if (containsAny(question, "course", "enroll", "enrollment")) {
+            return "To start a course, open Available Courses and choose Enroll. Faculty can publish a course from Manage Courses. Enrolled courses and their learning materials appear under My Courses.";
+        }
+        if (containsAny(question, "assignment", "homework", "submission", "grade")) {
+            return "Students can open Assignments to view work and submit an answer. Faculty can create assignments and review submissions from Manage Assignments. A course must exist first.";
+        }
+        if (containsAny(question, "quiz", "question", "exam", "test")) {
+            return "Students can take published quizzes from Quizzes. Faculty can create a quiz, add questions, and review attempts in the Quiz Builder. A course must exist first.";
+        }
+        if (containsAny(question, "attendance", "present", "absent")) {
+            return "Faculty can select a course in Attendance Management, mark each enrolled student present or absent, and save the session. Students can review their records in Attendance.";
+        }
+        if (containsAny(question, "meeting", "live class", "class link", "video")) {
+            return "Faculty can schedule a live class from Live Classes after creating a course. Students who enroll in that course can find and join its scheduled classes.";
+        }
+        if (containsAny(question, "doubt", "question for faculty", "ask faculty")) {
+            return "Students can send a doubt from Doubts & Replies after enrolling in a course. Choose the course, type the question, and select Send Doubt.";
+        }
+        if (containsAny(question, "hello", "hi", "hey")) {
+            return "Hi! I can help you find courses, assignments, quizzes, attendance, live classes, or the doubts section. What would you like to do?";
         }
 
-        if (msg.contains("assignment") || msg.contains("homework") || msg.contains("submit")) {
-            return "To view or submit your homework, go to the **Assignments** tab in your sidebar. You can type text-only answers and submit them directly. Your faculty will grade them and provide feedback.";
-        }
+        return "I can help with navigating courses, assignments, quizzes, attendance, live classes, and doubts. Subject-specific AI answers are unavailable until the administrator configures the chatbot provider.";
+    }
 
-        if (msg.contains("quiz") || msg.contains("exam") || msg.contains("test")) {
-            return "Navigate to the **Quizzes** tab in the sidebar to take multiple-choice quizzes created by your faculty. Each quiz has a timer, and your score will be calculated and graded automatically upon submission.";
+    private boolean containsAny(String value, String... terms) {
+        for (String term : terms) {
+            if (value.contains(term)) return true;
         }
-
-        if (msg.contains("doubt") || msg.contains("ask") || msg.contains("question")) {
-            return "Stuck on a topic? You can go to the **Doubts & Replies** page, select a course, and post a question. Your course faculty will be notified and will reply to guide you.";
-        }
-
-        if (msg.contains("help") || msg.contains("guide") || msg.contains("support")) {
-            return "Here are the topics I can help you with:\n" +
-                    "1. **Offline Learning** (keywords: offline, sync, internet)\n" +
-                    "2. **Courses** (keywords: course, lectures)\n" +
-                    "3. **Assignments** (keywords: assignment, submit)\n" +
-                    "4. **Quizzes** (keywords: quiz, test)\n" +
-                    "5. **Doubts** (keywords: doubt, question)\n" +
-                    "Just ask me anything!";
-        }
-
-        // Fallback
-        return "I'm not sure I fully understand. You can ask me about 'offline mode', 'my courses', 'assignments', 'quizzes', or type 'help' for a full list of guide topics.";
+        return false;
     }
 }

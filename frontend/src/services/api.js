@@ -144,6 +144,7 @@ export async function getCoursesByFaculty(facultyId) {
   return normalizeArrayPayload(resp.data)
 }
 
+
 // Enrollments
 export async function enrollStudent(payload) {
   const resp = await api.post('/enrollments', payload)
@@ -164,6 +165,29 @@ export async function getEnrollmentsByCourse(courseId) {
 export async function getProgressByStudent(studentId) {
   const resp = await api.get(`/progress/student/${studentId}`)
   return normalizeArrayPayload(resp.data)
+}
+
+// Course progress is based on course work the student has actually finished:
+// submitted assignments and attempted quizzes. Opening a link only updates recency.
+export async function getStudentCourseActivityProgress(studentId, courseId) {
+  const [assignments, quizzes, submissions, attempts] = await Promise.all([
+    getAssignmentsByCourse(courseId),
+    getQuizzesByCourse(courseId),
+    getSubmissionsByStudent(studentId),
+    getAttemptsByStudent(studentId),
+  ])
+  const assignmentRows = ensureArray(assignments)
+  const quizRows = ensureArray(quizzes)
+  const submissionIds = new Set(ensureArray(submissions).map((item) => String(item.assignmentId)))
+  const attemptedQuizIds = new Set(ensureArray(attempts).map((item) => String(item.quizId)))
+  const completed = assignmentRows.filter((item) => submissionIds.has(String(item.id))).length
+    + quizRows.filter((item) => attemptedQuizIds.has(String(item.id))).length
+  const total = assignmentRows.length + quizRows.length
+  return {
+    progressPercent: total ? Math.round((completed / total) * 100) : 0,
+    completedActivities: completed,
+    totalActivities: total,
+  }
 }
 
 export async function getProgressByStudentCourse(studentId, courseId) {
@@ -205,14 +229,18 @@ export async function deleteAssignment(id) {
 export async function submitAssignment(payload) {
   const resp = await api.post('/submissions', {
     assignmentId: payload.assignmentId,
-    studentId: payload.studentId,
-    feedback: payload.text ?? payload.feedback ?? '',
+    answerText: payload.answerText ?? payload.text ?? '',
   })
   return resp.data
 }
 
 export async function getSubmissionsByAssignment(assignmentId) {
   const resp = await api.get(`/submissions/assignment/${assignmentId}`)
+  return normalizeArrayPayload(resp.data)
+}
+
+export async function getAssignmentTracking(assignmentId) {
+  const resp = await api.get(`/submissions/assignment/${assignmentId}/tracking`)
   return normalizeArrayPayload(resp.data)
 }
 
@@ -464,5 +492,30 @@ export async function clearChatbotHistory(studentId) {
   return resp.data
 }
 
-export default api
+// Meetings
+export async function getMeetingsByCourse(courseId) {
+  const resp = await api.get(`/meetings/course/${courseId}`)
+  return normalizeArrayPayload(resp.data)
+}
 
+export async function getMeetingById(id) {
+  const resp = await api.get(`/meetings/${id}`)
+  return resp.data
+}
+
+export async function joinMeeting(id) {
+  const resp = await api.post(`/meetings/${id}/join`)
+  return resp.data
+}
+
+export async function createMeeting(payload) {
+  const resp = await api.post('/meetings', payload)
+  return resp.data
+}
+
+export async function updateMeetingStatus(id, status) {
+  const resp = await api.patch(`/meetings/${id}/status`, null, { params: { status } })
+  return resp.data
+}
+
+export default api

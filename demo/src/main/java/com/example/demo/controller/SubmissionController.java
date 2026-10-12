@@ -1,9 +1,8 @@
 package com.example.demo.controller;
 
+import com.example.demo.dto.AssignmentTrackingResponse;
 import com.example.demo.dto.SubmissionRequest;
 import com.example.demo.dto.SubmissionResponse;
-import com.example.demo.entity.Role;
-import com.example.demo.entity.SubmissionStatus;
 import com.example.demo.entity.User;
 import com.example.demo.exception.ResourceNotFoundException;
 import com.example.demo.repository.UserRepository;
@@ -22,50 +21,47 @@ import java.util.List;
 @RequestMapping("/api/submissions")
 @RequiredArgsConstructor
 public class SubmissionController {
-
     private final SubmissionService submissionService;
     private final UserRepository userRepository;
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN','STUDENT')")
     public ResponseEntity<SubmissionResponse> submit(@Valid @RequestBody SubmissionRequest req, Authentication authentication) {
-        // ensure student matches authenticated user unless admin
-        User current = userRepository.findByEmail(authentication.getName())
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-
-        if (current.getRole() == Role.STUDENT && !current.getId().equals(req.getStudentId())) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        }
-
-        return ResponseEntity.status(HttpStatus.CREATED).body(submissionService.submitAssignment(req));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(submissionService.submitAssignment(req, currentUser(authentication)));
     }
 
     @GetMapping("/assignment/{assignmentId}")
     @PreAuthorize("hasAnyRole('ADMIN','FACULTY')")
-    public ResponseEntity<List<SubmissionResponse>> getByAssignment(@PathVariable Long assignmentId) {
-        return ResponseEntity.ok(submissionService.getSubmissionsByAssignment(assignmentId));
+    public ResponseEntity<List<SubmissionResponse>> getByAssignment(@PathVariable Long assignmentId,
+                                                                    Authentication authentication) {
+        return ResponseEntity.ok(submissionService.getSubmissionsByAssignment(assignmentId, currentUser(authentication)));
+    }
+
+    @GetMapping("/assignment/{assignmentId}/tracking")
+    @PreAuthorize("hasAnyRole('ADMIN','FACULTY')")
+    public ResponseEntity<List<AssignmentTrackingResponse>> getTracking(@PathVariable Long assignmentId,
+                                                                        Authentication authentication) {
+        return ResponseEntity.ok(submissionService.getAssignmentTracking(assignmentId, currentUser(authentication)));
     }
 
     @GetMapping("/student/{studentId}")
     @PreAuthorize("hasAnyRole('ADMIN','FACULTY','STUDENT')")
-    public ResponseEntity<List<SubmissionResponse>> getByStudent(@PathVariable Long studentId, Authentication authentication) {
-        User current = userRepository.findByEmail(authentication.getName())
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-
-        if (current.getRole() == Role.STUDENT && !current.getId().equals(studentId)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        }
-
-        return ResponseEntity.ok(submissionService.getSubmissionsByStudent(studentId));
+    public ResponseEntity<List<SubmissionResponse>> getByStudent(@PathVariable Long studentId,
+                                                                 Authentication authentication) {
+        return ResponseEntity.ok(submissionService.getSubmissionsByStudent(studentId, currentUser(authentication)));
     }
 
     @PutMapping("/{id}/grade")
     @PreAuthorize("hasAnyRole('ADMIN','FACULTY')")
-    public ResponseEntity<SubmissionResponse> grade(@PathVariable Long id, @RequestParam Double grade, @RequestParam(required = false) String feedback, Authentication authentication) {
-        User current = userRepository.findByEmail(authentication.getName())
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+    public ResponseEntity<SubmissionResponse> grade(@PathVariable Long id, @RequestParam Double grade,
+                                                     @RequestParam(required = false) String feedback,
+                                                     Authentication authentication) {
+        return ResponseEntity.ok(submissionService.gradeSubmission(id, grade, feedback, currentUser(authentication)));
+    }
 
-        // Optionally in future: confirm faculty belongs to assignment's course
-        return ResponseEntity.ok(submissionService.gradeSubmission(id, grade, feedback, current.getId()));
+    private User currentUser(Authentication authentication) {
+        return userRepository.findByEmail(authentication.getName())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
     }
 }

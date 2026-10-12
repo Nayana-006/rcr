@@ -72,7 +72,7 @@ public class CourseProgressService {
                         .lastAccessed(Instant.now())
                         .build());
 
-        progress.setProgressPercent(Math.max(progress.getProgressPercent(), 100));
+        // Opening a course updates recency; it does not mean the student completed it.
         progress.setLastAccessed(Instant.now());
         return toResponse(courseProgressRepository.save(progress));
     }

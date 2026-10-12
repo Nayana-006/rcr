@@ -1,36 +1,47 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { LinearProgress } from '../../components/charts/ProgressBars'
-import { getAttendanceByStudent, getAttendancePercentByStudent, ensureArray } from '../../services/api'
+import { getAttendanceByStudent, ensureArray } from '../../services/api'
 
 export default function StudentAttendance() {
   const { user } = useAuth()
   const studentId = user?.userId ?? user?.id
 
   const [model, setModel] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let mounted = true
     async function load() {
       if (!studentId) return
-      const attendanceSessions = ensureArray(await getAttendanceByStudent(studentId))
-      const percentModel = await getAttendancePercentByStudent(studentId)
-
-      if (mounted) {
-        setModel({
-          percent: percentModel.percent,
-          courseTitle: 'Overall Attendance',
-          sessions: attendanceSessions.slice(0, 8),
-          hasAnySessions: attendanceSessions.length > 0,
-          attendanceCount: attendanceSessions.length,
-        })
+      setLoading(true)
+      setError('')
+      try {
+        const attendanceSessions = ensureArray(await getAttendanceByStudent(studentId))
+        const presentCount = attendanceSessions.filter((session) => session.present).length
+        if (mounted) {
+          setModel({
+            percent: attendanceSessions.length ? Math.round((presentCount / attendanceSessions.length) * 100) : 0,
+            courseTitle: 'Overall Attendance',
+            sessions: attendanceSessions.slice(0, 8),
+            hasAnySessions: attendanceSessions.length > 0,
+          })
+        }
+      } catch (e) {
+        if (mounted) setError(e?.response?.data?.message ?? 'Could not load attendance. Please try again.')
+      } finally {
+        if (mounted) setLoading(false)
       }
     }
     load()
     return () => { mounted = false }
-  }, [studentId])
+  }, [studentId, reloadKey])
 
-  if (!model) return null
+  if (loading) return <div className="card" style={{ padding: 24 }}>Loading attendance…</div>
+  if (error) return <div className="card" role="alert" style={{ padding: 24 }}><p>{error}</p><button className="btn btnPrimary" onClick={() => setReloadKey((key) => key + 1)}>Retry</button></div>
+  if (!model) return <div className="card" role="alert" style={{ padding: 24 }}>Sign in again to load attendance.</div>
 
   return (
     <div>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import {
   getEnrollmentsByStudent,
@@ -10,6 +10,7 @@ import {
   ensureArray,
 } from '../../services/api'
 import { toast } from 'sonner'
+import { Link } from 'react-router-dom'
 
 export default function StudentQuizzes() {
   const { user } = useAuth()
@@ -21,6 +22,7 @@ export default function StudentQuizzes() {
   const [attempts, setAttempts] = useState([])
   const [selectedCourseId, setSelectedCourseId] = useState('')
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
 
   // Active quiz attempt state
   const [activeQuiz, setActiveQuiz] = useState(null)
@@ -28,6 +30,7 @@ export default function StudentQuizzes() {
   const [answers, setAnswers] = useState({}) // {questionId: option}
   const [timeLeft, setTimeLeft] = useState(0)
   const [submitting, setSubmitting] = useState(false)
+  const submittingRef = useRef(false)
   const [showResult, setShowResult] = useState(null) // {score, totalMarks}
 
   // Load data
@@ -36,6 +39,7 @@ export default function StudentQuizzes() {
     async function loadData() {
       if (!studentId) return
       setLoading(true)
+      setLoadError('')
       try {
         const enrollments = ensureArray(await getEnrollmentsByStudent(studentId))
         const loadedCourses = []
@@ -57,8 +61,8 @@ export default function StudentQuizzes() {
           setQuizzes(allQuizzes)
           setAttempts(studentAttempts)
         }
-      } catch (_) {
-        toast.error('Failed to load quiz data')
+      } catch (error) {
+        if (mounted) setLoadError(error?.response?.data?.message ?? 'Could not load quizzes. Please try again.')
       } finally {
         if (mounted) setLoading(false)
       }
@@ -68,21 +72,6 @@ export default function StudentQuizzes() {
       mounted = false
     }
   }, [studentId, showResult])
-
-  // Timer effect
-  useEffect(() => {
-    if (!activeQuiz || timeLeft <= 0) {
-      if (activeQuiz && timeLeft === 0) {
-        toast.warning("Time's up! Submitting your attempt...")
-        submitAttempt()
-      }
-      return
-    }
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => prev - 1)
-    }, 1000)
-    return () => clearInterval(timer)
-  }, [activeQuiz, timeLeft, submitAttempt])
 
   // Start Quiz
   async function startQuiz(quiz) {
@@ -105,7 +94,7 @@ export default function StudentQuizzes() {
       setTimeLeft((quiz.durationMinutes || 10) * 60)
       setShowResult(null)
       toast.success(`Started ${quiz.title}`)
-    } catch (_) {
+    } catch {
       toast.error('Failed to fetch quiz questions')
     }
   }
@@ -120,7 +109,8 @@ export default function StudentQuizzes() {
 
   // Submit attempt
   const submitAttempt = useCallback(async () => {
-    if (!activeQuiz || submitting) return
+    if (!activeQuiz || submittingRef.current) return
+    submittingRef.current = true
     setSubmitting(true)
     try {
       // Map answers object to JSON
@@ -133,12 +123,29 @@ export default function StudentQuizzes() {
       setActiveQuiz(null)
       setQuestions([])
       toast.success('Quiz submitted successfully!')
-    } catch (_) {
+    } catch {
       toast.error('Failed to submit quiz attempt')
     } finally {
+      submittingRef.current = false
       setSubmitting(false)
     }
   }, [activeQuiz, answers, studentId])
+
+  // Keep this effect after submitAttempt so it never reads an uninitialized handler.
+  useEffect(() => {
+    if (!activeQuiz || timeLeft <= 0) {
+      if (activeQuiz && timeLeft === 0) {
+        toast.warning("Time's up! Submitting your attempt...")
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        void submitAttempt()
+      }
+      return
+    }
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => prev - 1)
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [activeQuiz, timeLeft, submitAttempt])
 
   // Format timer
   function formatTime(seconds) {
@@ -267,6 +274,8 @@ export default function StudentQuizzes() {
       <div className="card" style={{ padding: 16 }}>
         <div className="badge badgeAccent">Student Module</div>
         <h1 style={{ fontSize: 26, marginTop: 10 }}>Quizzes</h1>
+        {loadError && <div className="badge badgeDanger" role="alert" style={{ marginTop: 10 }}>{loadError}</div>}
+        {!courses.length && !loadError && <div className="badge" style={{ display: 'flex', marginTop: 10 }}>No enrolled courses yet. <Link to="/student/courses" style={{ color: 'var(--accent)', textDecoration: 'underline', marginLeft: 4 }}>Browse available courses</Link></div>}
         <div style={{ display: 'flex', gap: 12, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
           <label style={{ fontSize: 13, opacity: 0.8 }}>Filter by Course:</label>
           <select

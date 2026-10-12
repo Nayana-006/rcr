@@ -21,7 +21,8 @@ import StudentProgress from './pages/student/StudentProgress'
 import StudentDoubts from './pages/student/StudentDoubts'
 import StudentNotifications from './pages/student/StudentNotifications'
 import StudentQuizzes from './pages/student/StudentQuizzes'
-
+import StudentMeetings from './pages/meetings/StudentMeetings'
+import LiveClassRoom from './pages/meetings/LiveClassRoom'
 // Faculty
 import FacultyDashboard from './pages/faculty/FacultyDashboard'
 import FacultyProfile from './pages/faculty/FacultyProfile'
@@ -31,7 +32,7 @@ import FacultyAttendance from './pages/faculty/FacultyAttendance'
 import FacultyStudentProgress from './pages/faculty/FacultyStudentProgress'
 import FacultyDoubts from './pages/faculty/FacultyDoubts'
 import FacultyQuizzes from './pages/faculty/FacultyQuizzes'
-
+import FacultyMeetings from './pages/meetings/FacultyMeetings'
 
 // Admin
 import AdminDashboard from './pages/admin/AdminDashboard'
@@ -89,6 +90,8 @@ function App() {
                   <Route path="progress" element={<StudentProgress />} />
                   <Route path="doubts" element={<StudentDoubts />} />
                   <Route path="notifications" element={<StudentNotifications />} />
+                  <Route path="meetings" element={<StudentMeetings />} />
+                  <Route path="live/:id" element={<LiveClassRoom />} />
                 </Routes>
               </ProtectedRoute>
             }
@@ -109,6 +112,8 @@ function App() {
                   <Route path="attendance" element={<FacultyAttendance />} />
                   <Route path="student-progress" element={<FacultyStudentProgress />} />
                   <Route path="doubts" element={<FacultyDoubts />} />
+                  <Route path="meetings" element={<FacultyMeetings />} />
+                  <Route path="live/:id" element={<LiveClassRoom />} />
                 </Routes>
               </ProtectedRoute>
             }
