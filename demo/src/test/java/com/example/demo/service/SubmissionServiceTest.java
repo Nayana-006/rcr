@@ -49,13 +49,11 @@ class SubmissionServiceTest {
         course = Course.builder().id(10L).title("Math").faculty(faculty).build();
         assignment = Assignment.builder().id(20L).title("Algebra").course(course)
                 .maxMarks(25.0).dueDate(Instant.now().plusSeconds(3600)).build();
-        when(assignmentRepository.findById(20L)).thenReturn(Optional.of(assignment));
-        when(enrollmentRepository.existsByStudentAndCourse(student, course)).thenReturn(true);
-        when(submissionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     @Test
     void enrolledStudentSubmitsAndResubmitsSameRecordClearingGradeAndFeedback() {
+        stubEligibleSubmission();
         SubmissionRequest request = request("First answer");
         var first = service.submitAssignment(request, student);
         assertEquals("First answer", first.getAnswerText());
@@ -79,6 +77,7 @@ class SubmissionServiceTest {
 
     @Test
     void lateSubmissionsFollowAssignmentPolicyAndAreMarkedLate() {
+        stubEligibleSubmission();
         assignment.setDueDate(Instant.now().minusSeconds(10));
         assertThrows(IllegalArgumentException.class, () -> service.submitAssignment(request("Late"), student));
         assignment.setAllowLateSubmission(true);
@@ -87,6 +86,7 @@ class SubmissionServiceTest {
 
     @Test
     void studentMustBeEnrolledAndCannotReadAnotherStudentsSubmission() {
+        when(assignmentRepository.findById(20L)).thenReturn(Optional.of(assignment));
         when(enrollmentRepository.existsByStudentAndCourse(student, course)).thenReturn(false);
         assertThrows(AccessDeniedException.class, () -> service.submitAssignment(request("Answer"), student));
         assertThrows(AccessDeniedException.class, () -> service.getSubmissionsByStudent(99L, student));
@@ -97,6 +97,7 @@ class SubmissionServiceTest {
         Submission submission = Submission.builder().id(5L).assignment(assignment).student(student)
                 .submittedAt(Instant.now()).status(SubmissionStatus.SUBMITTED).answerText("answer").build();
         when(submissionRepository.findById(5L)).thenReturn(Optional.of(submission));
+        stubSubmissionSave();
         assertThrows(AccessDeniedException.class, () -> service.gradeSubmission(5L, 10.0, "x", anotherFaculty));
         assertThrows(IllegalArgumentException.class, () -> service.gradeSubmission(5L, -1.0, "x", faculty));
         assertThrows(IllegalArgumentException.class, () -> service.gradeSubmission(5L, 26.0, "x", faculty));
@@ -123,6 +124,16 @@ class SubmissionServiceTest {
         assertTrue(tracking.get(0).isSubmitted());
         assertFalse(tracking.get(1).isSubmitted());
         assertEquals("NOT_SUBMITTED", tracking.get(1).getStatus());
+    }
+
+    private void stubEligibleSubmission() {
+        when(assignmentRepository.findById(20L)).thenReturn(Optional.of(assignment));
+        when(enrollmentRepository.existsByStudentAndCourse(student, course)).thenReturn(true);
+        stubSubmissionSave();
+    }
+
+    private void stubSubmissionSave() {
+        when(submissionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     private SubmissionRequest request(String answer) {
