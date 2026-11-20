@@ -13,7 +13,8 @@ public class ChatbotHttpConfig {
     public RestTemplate chatbotRestTemplate() {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Duration.ofSeconds(5));
-        requestFactory.setReadTimeout(Duration.ofSeconds(30));
+        // Local models can need extra time on their first response while loading into memory.
+        requestFactory.setReadTimeout(Duration.ofSeconds(120));
         return new RestTemplate(requestFactory);
     }
 }

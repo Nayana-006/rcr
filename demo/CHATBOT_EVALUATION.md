@@ -1,6 +1,6 @@
 # RCR Assistant evaluation checklist
 
-Use these prompts in a configured development environment. Record whether each answer is clear, accurate, appropriately uncertain, and free of invented sources. Current-information prompts should use web search only when `OPENAI_WEB_SEARCH_ENABLED=true`; verify cited current facts against the sources returned by the provider.
+Use these prompts in a configured development environment. Record whether each answer is clear, accurate, appropriately uncertain, and free of invented sources. The default local Ollama integration does not enable live web search, so current-information answers should clearly state that they cannot verify current facts rather than guess.
 
 | Area | Prompt | What to check |
 | --- | --- | --- |
@@ -14,6 +14,6 @@ Use these prompts in a configured development environment. Record whether each a
 | Interview | Give a concise plan for preparing for a junior Java interview. | Actionable steps, no guarantee of hiring outcomes. |
 | Debugging | My React component rerenders forever. What should I inspect first? | Suggests checking render-time state changes, effects, and handler invocation without pretending to know the code. |
 | RCR platform | How do I submit an assignment? | Describes only known platform behavior and avoids inventing unavailable UI steps. |
-| Current information | What is the latest stable Java release today? | Uses web search when enabled, states the date/context, and supports the answer with retrieved sources. |
+| Current information | What is the latest stable Java release today? | Clearly states that live information is unavailable and avoids guessing. |
 
 These prompts are a repeatable human review set, not a claim of a guaranteed accuracy percentage. Automated provider tests mock network responses and do not incur API charges.

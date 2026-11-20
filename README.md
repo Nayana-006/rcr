@@ -93,12 +93,22 @@ spring.datasource.password=your_password
 
 #### Environment Variables (Backend)
 
-For the AI Assistant to work properly, export the following environment variable in your terminal before running Spring Boot:
+The RCR Assistant uses Ollama by default, so it can run a local model without a hosted API key or API charges. Install [Ollama for Windows](https://ollama.com/download/windows), then open PowerShell and download/run the model once:
 
-```bash
-export OPENAI_API_KEY="sk-your-openai-api-key"
-export OPENAI_MODEL="gpt-3.5-turbo" # Optional, defaults to gpt-3.5-turbo
+```powershell
+ollama run qwen3:4b
 ```
+
+The first run downloads the model (about 2.5 GB). After it starts, you can type `/bye`; keep the Ollama app/service running. Then start Spring Boot in another PowerShell window with:
+
+```powershell
+$env:CHATBOT_PROVIDER = 'ollama'
+$env:OLLAMA_BASE_URL = 'http://localhost:11434'
+$env:OLLAMA_MODEL = 'qwen3:4b'
+./mvnw.cmd spring-boot:run
+```
+
+Model speed depends on the computer's hardware. Gemini and OpenAI remain optional hosted providers; set `CHATBOT_PROVIDER=gemini` or `CHATBOT_PROVIDER=openai` and configure the matching backend-only key to use them instead.
 
 ### 3. Backend Setup
 

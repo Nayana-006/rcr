@@ -3,6 +3,7 @@ package com.example.demo.service;
 import com.example.demo.entity.ChatMessage;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -21,6 +22,7 @@ import java.util.Map;
 
 @Slf4j
 @Component
+@ConditionalOnProperty(name = "chatbot.provider", havingValue = "openai")
 public class OpenAiResponsesClient implements ChatbotProvider {
 
     private static final String RESPONSES_URL = "https://api.openai.com/v1/responses";
